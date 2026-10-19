@@ -50,3 +50,12 @@ Dónde guardar las claves reales de cada cliente, de más a menos recomendado:
 3. **Desarrollo local:** `.env.local` en una carpeta fuera de OneDrive (p. ej. `C:\Users\tommy\secretos\<cliente>\`), o mover el proyecto fuera de OneDrive.
 
 Si una clave real ya estuvo en el vault: rotarla en el proveedor. Borrar el archivo no la saca del historial de versiones de OneDrive.
+
+## Marca del cliente (qué se configura y qué no)
+El nombre "DeskcommCRM" aparece solo si no se configura la marca. Por instalación, antes de entregar:
+- `APP_NAME`, `APP_LOGO_URL`, `APP_ACCENT_HEX` en el `.env` del cliente, o desde la pantalla `/admin/marca` (el banco manda sobre el `.env`). Cubre login, títulos, manifest/PWA, ícono, correos y emisor del MFA.
+- El instalador ofrece "DeskcommCRM" como valor por defecto de `APP_NAME` (`hostgator-setup-kit/install.sh:1261`): no apretar Enter, escribir el nombre del cliente.
+
+`ACERCA.md` (atribución MIT) entra siempre al entregable; `LICENSE` no se toca.
+
+Pendientes de marca que la configuración no resuelve (no se editó código): ver la sección del Registro en `04-CRM-LRN/03-Deskcomm/ESTADO.md`.
