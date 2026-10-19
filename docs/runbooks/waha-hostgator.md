@@ -19,10 +19,10 @@ owner: Rafael Melgaço
 | OS | Ubuntu 22.04 LTS ou 24.04 LTS | NOWEB engine testado em ambos. CentOS funciona mas docs do compose pressupõem Debian-family. |
 | CPU/RAM | mín. 2 vCPU / 4 GB RAM | NOWEB usa ~150 MB por sessão; +overhead Node ~300 MB. |
 | Disco | mín. 80 GB SSD | Mídia inline mínima (vai pro Supabase Storage), mas `.sessions` cresce com histórico WhatsApp Web. |
-| Datacenter | São Paulo (default Hostgator BR) | Latência <30ms pro Meta SP — relevante pra anti-banimento e UX de QR. |
+| Datacenter | São Paulo (recomendado p/ Brasil) | Latência <30ms pro Meta SP — relevante pra anti-banimento e UX de QR. |
 | IP público | Estático (incluso no plano) | Necessário pra DNS A record + egress allowlist. |
 
-> **Sem parceria com Hostgator?** Substitua por Hetzner CX22 (~$5/mês, datacenter EU) ou DigitalOcean Droplet 4GB (~$24/mês). Tudo neste runbook funciona idêntico — só não terá a vantagem de latência BR.
+> **Outro provedor?** Serve Hetzner CX22 (~$5/mês, datacenter EU) ou DigitalOcean Droplet 4GB (~$24/mês). Tudo neste runbook funciona idêntico — só não terá a vantagem de latência BR.
 
 ---
 

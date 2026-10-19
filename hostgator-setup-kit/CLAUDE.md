@@ -35,7 +35,7 @@ discordarem, vale o guia; quando o guia e `install.sh` discordarem, vale o insta
 
 ## O que a pessoa precisa ter (peça uma por vez, quando chegar a hora)
 
-- Um **servidor VPS** (HostGator é a parceria e o caminho testado; qualquer VPS com Docker serve).
+- Um **servidor VPS** (qualquer VPS com Docker serve).
   Sem servidor: `bash comecar.sh` no computador dela nomeia o plano (2 vCPU / 4 GB) e abre o link.
 - Um **domínio** (ex.: `crm.empresadela.com.br`) apontado para o IP do servidor com um registro A.
   Cloudflare: nuvem cinza até o cadeado aparecer.

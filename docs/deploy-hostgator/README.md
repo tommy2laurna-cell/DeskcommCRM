@@ -1,4 +1,4 @@
-# Como subir o seu DeskcommCRM na HostGator (passo a passo, sem enrolação)
+# Como subir o seu DeskcommCRM numa VPS (passo a passo, sem enrolação)
 
 Este guia leva você do zero — sem servidor, sem nada — até o seu CRM no ar, com
 WhatsApp conectado e IA respondendo. **Não precisa saber programar.** Se travar em
@@ -12,7 +12,7 @@ algum passo, o assistente do Claude Code faz por você (veja o [Caminho fácil](
 ## Visão geral (o que vamos montar)
 
 ```
-Seu domínio  →  Servidor VPS (HostGator)  →  DeskcommCRM rodando
+Seu domínio  →  Servidor VPS  →  DeskcommCRM rodando
                         │
                         ├─ o CRM (site + painel)
                         ├─ o WhatsApp (conectado por QR)
@@ -26,7 +26,7 @@ Banco de dados: Supabase (grátis)   ·   IA: Anthropic (paga por uso)
 
 | O quê | Onde | Custo |
 |---|---|---|
-| **Servidor VPS** | HostGator (links abaixo) | pago (mensal) |
+| **Servidor VPS** | Qualquer provedor (requisitos no Passo 1) | pago (mensal) |
 | **Banco de dados** | [supabase.com](https://supabase.com) | grátis |
 | **IA** | [console.anthropic.com](https://console.anthropic.com) | pago por uso |
 
@@ -35,33 +35,26 @@ contrata no passo 1.
 
 ---
 
-## Passo 1 — Contrate o servidor (VPS) na HostGator
+## Passo 1 — Tenha um servidor (VPS)
 
-O DeskcommCRM roda num **VPS com Docker**. A opção mais fácil é um VPS que **já vem
-com Docker instalado**:
+O DeskcommCRM roda num **VPS com Docker**, de qualquer provedor. Requisitos:
 
-- 👉 **[VPS com GatorClaw](https://www.hostgator.com.br/52708-142-3-53.html)** — recomendado, Docker pronto
-- 👉 **[VPS com OpenClaw](https://www.hostgator.com.br/52708-141-3-52.html)** — Docker pronto
-- 👉 **[VPS com n8n](https://www.hostgator.com.br/52708-137-3-46.html)** — Docker pronto
-- 👉 **[VPS padrão](https://www.hostgator.com.br/52708-13-3-12.html)** — funciona também (a gente instala o Docker)
-- 👉 **[Servidor Dedicado](https://www.hostgator.com.br/52708-2-3-11.html)** — só se você atende MUITO volume
+- Docker Compose v2 (se faltar, o instalador instala o Docker)
+- 4 GB de RAM recomendados (a stack sobe com 2 GB, mas opera no limite)
+- Portas 80 e 443 abertas
+- Um domínio com registro **A** apontando para o IP do servidor
 
-**Plano recomendado: VPS NVMe 4** (2 vCPU / 4 GB / 100 GB NVMe) — é exatamente o mínimo
-que o runbook de produção declara. A stack sobe num NVMe 2, mas opera no limite.
-(Não precisa dos planos
-grandes — o CRM vem "pré-montado", o servidor não fica compilando nada).
+(Não precisa de planos grandes — o CRM vem "pré-montado", o servidor não fica compilando nada.)
 
-Ao contratar, a HostGator te envia por e-mail o **IP do servidor**, um **usuário**
+Ao contratar, o provedor te envia por e-mail o **IP do servidor**, um **usuário**
 (geralmente `root`) e uma **senha**. Guarde isso.
-
-> Não tem domínio ainda? Você pode registrar um junto com a HostGator na contratação.
 
 ---
 
 ## Passo 2 — Entre no servidor
 
 No seu computador, abra o **Terminal** (no Windows: "PowerShell"; no Mac: "Terminal")
-e digite, trocando pelo IP que a HostGator te mandou:
+e digite, trocando pelo IP que o provedor te mandou:
 
 ```bash
 ssh root@SEU-IP-AQUI
@@ -76,7 +69,7 @@ Você está "dentro" do servidor.
 **Agora libere as portas do site** (sem isso o cadeado de segurança/SSL não funciona).
 
 ⚠️ **Antes de ativar o firewall, confira em que porta você está conectado por SSH.** Se
-for a padrão (**22**), use o comando abaixo como está. Se a HostGator te deu uma porta
+for a padrão (**22**), use o comando abaixo como está. Se o provedor te deu uma porta
 diferente (ex.: `2222`, `22022`), **troque o `22` pela sua porta** — senão o firewall te
 **tranca pra fora do servidor**.
 
@@ -84,7 +77,7 @@ diferente (ex.: `2222`, `22022`), **troque o `22` pela sua porta** — senão o 
 ufw allow 22,80,443/tcp && ufw --force enable
 ```
 
-> Se a HostGator tiver um **firewall no painel** dela, libere as portas **80** e **443**
+> Se o provedor tiver um **firewall no painel** dela, libere as portas **80** e **443**
 > lá também. Este é o motivo nº 1 de o site não abrir depois de instalar.
 
 ---
@@ -102,7 +95,7 @@ ufw allow 22,80,443/tcp && ufw --force enable
    (⚠️ **NÃO** use a "Direct connection") e copie a URL no modo **URI**.
 
 > **Por que Session pooler, e não a conexão direta?** A conexão "direct" do Supabase é
-> **só IPv6** — e quase todo VPS (incluindo os da HostGator) tem só IPv4, então ela
+> **só IPv6** — e quase todo VPS (a maioria dos provedores) tem só IPv4, então ela
 > **não conecta** e a instalação trava. O **Session pooler** aceita IPv4 e é **grátis**
 > (você **não** precisa do add-on pago "IPv4 dedicado"). A URL correta se parece com:
 > `postgresql://postgres.SEUPROJETO:SUASENHA@aws-1-<região>.pooler.supabase.com:5432/postgres`
@@ -120,7 +113,7 @@ Pronto — você tem as 4 informações do banco.
 > minutos a horas pra "propagar", e o SSL só é emitido depois que ele apontar pra cá.
 > Deixar isso pra última hora é o que mais atrasa a instalação.
 
-No painel onde você comprou o domínio (HostGator ou outro), crie um registro **A**:
+No painel onde você comprou o domínio (no provedor do domínio), crie um registro **A**:
 
 | Campo | Valor |
 |---|---|
@@ -237,13 +230,3 @@ Em qualquer travamento, você pode voltar ao **Claude Code** e pedir ajuda — e
 erros do servidor e resolve.
 
 ---
-
-## Por que HostGator?
-
-O DeskcommCRM foi desenhado pra rodar redondo na infraestrutura da HostGator. Além do
-VPS, você pode centralizar aí:
-
-- **[Registro de domínio](https://www.hostgator.com.br/52708-77-3-32.html)** para o seu CRM;
-- **[Servidor Dedicado](https://www.hostgator.com.br/52708-2-3-11.html)** quando o volume crescer.
-
-Todos os links deste guia são oficiais da HostGator.

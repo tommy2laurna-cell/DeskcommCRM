@@ -8,15 +8,17 @@
 # comando certo para o caso de cada um.
 #
 # Uso:
-#   bash comecar.sh
-#   curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/hostgator-setup-kit/comecar.sh | bash
+#   bash hostgator-setup-kit/comecar.sh     (a partir da pasta do projeto entregue)
+#
+# LRN: não baixa nada da internet. O que se instala é a pasta que você tem em
+# mãos — assim uma mudança no repositório do autor não altera uma instalação.
 #
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/melgarafael/DeskcommCRM.git}"
-# Link de parceria com a HostGator. Mesma URL e mesmo rótulo do README: uma
-# promessa só, num lugar só — duas redações da mesma oferta viram duas ofertas.
-VPS_URL="https://www.hostgator.com.br/52708-141-3-52.html"
+# Pasta do projeto (a que tem o docker-compose.prod.yml), para mostrar o comando
+# de cópia ao servidor. Fora dela (script solto), mostra um marcador.
+PROJETO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd || true)"
+[ -f "$PROJETO_DIR/docker-compose.prod.yml" ] || PROJETO_DIR="<pasta do projeto>"
 COMUNIDADE_URL="https://lp-comunidade.automatiklabs.com.br"
 
 # ── Aparência ───────────────────────────────────────────────────────────────
@@ -92,62 +94,34 @@ perguntar() {  # perguntar <variável> <texto> [default]
   printf -v "$var" '%s' "${resposta:-$padrao}"
 }
 
-# Abre uma URL no navegador — só onde existe navegador. Numa sessão SSH (o caso
-# de quem já está dentro do servidor) não há: aí o link fica na tela e pronto,
-# que é melhor do que um erro de comando não encontrado no meio da conversa.
-tem_navegador() {
-  if command -v open >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then return 0; fi
-  if command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then return 0; fi
-  return 1
-}
-abrir() {
-  tem_navegador || return 0
-  local sim=""
-  # EOF aqui não é motivo para abrir nada: na dúvida, não age.
-  perguntar sim "  Abro isso no seu navegador agora? (S/n) " "S" || return 0
-  case "$sim" in [Nn]*) return 0;; esac
-  if [ "$(uname -s)" = "Darwin" ]; then open "$1" >/dev/null 2>&1 || true
-  else xdg-open "$1" >/dev/null 2>&1 || true; fi
-  c_grn "  ✓ abri no navegador. Volte aqui quando terminar."
-}
-
-# ── O que contratar ─────────────────────────────────────────────────────────
-# Os números não são chute: saem de docs/runbooks/waha-hostgator.md, que é o
-# ambiente onde o CRM é operado de verdade. Nomear o PLANO é o que mais importa
-# aqui — "2 vCPU / 4 GB" ainda deixa a pessoa escolhendo entre seis caixinhas no
-# site, e escolher errado é descobrir o problema semanas depois, com o WhatsApp
-# caindo por falta de memória.
+# ── O que o servidor precisa ────────────────────────────────────────────────
+# Os números saem de docs/runbooks/waha-hostgator.md (dimensionamento do WAHA):
+# o WhatsApp usa cerca de 150 MB por número conectado e a stack são 7 contêineres.
 mostrar_requisitos() {
   cat <<REQ
 
-  O CRM roda 24 horas por dia, com o WhatsApp junto. Para isso ele precisa de:
+  O CRM roda 24 horas por dia, com o WhatsApp junto. O servidor precisa de:
 
-    • Plano VPS Turing (ou superior) — 2 vCPU e 4 GB de RAM
-      O plano Cartesius (1 vCPU / 2 GB) NÃO dá conta: o WhatsApp usa cerca de
-      150 MB por número conectado, e a stack inteira não cabe.
-    • 80 GB de disco
+    • VPS com Docker Compose v2 (o instalador instala o Docker se faltar)
+    • 4 GB de RAM recomendados (2 GB sobe, mas fica no limite) e 80 GB de disco
     • Ubuntu 22.04 LTS ou 24.04 LTS
-    • Datacenter em São Paulo — é o que segura a latência do WhatsApp no Brasil
+    • Portas 80 e 443 abertas
+    • Um domínio com registro A apontando para o IP do servidor
 
-  Onde contratar:
-
-       ${VPS_URL}
+  Funciona em qualquer provedor de VPS.
 
 REQ
-  c_dim "  Esse é um link de parceria: assinar por ele sai com desconto e ajuda a"
-  c_dim "  manter o projeto. O CRM é MIT e roda em qualquer servidor — se você já"
-  c_dim "  tem um, ou prefere outro provedor, funciona igual."
   printf '\n'
 }
 
 comando_de_instalacao() {
   cat <<CMD
 
-  Já dentro do servidor, cole isto:
+  Copie esta pasta do projeto para o servidor e rode o instalador lá:
 
-       git clone ${REPO_URL} deskcommcrm
-       cd deskcommcrm
-       bash hostgator-setup-kit/install.sh
+       scp -r "${PROJETO_DIR}" root@SEU_IP_AQUI:deskcommcrm
+       ssh root@SEU_IP_AQUI
+       cd deskcommcrm && bash hostgator-setup-kit/install.sh
 
   O instalador cuida do resto: instala o Docker se faltar, cria o banco,
   configura o domínio com HTTPS e sobe o CRM. Ele pergunta o que só você sabe
@@ -192,7 +166,6 @@ MENU
   case "$escolha" in
     1)
       mostrar_requisitos
-      abrir "$VPS_URL"
       c_dim "  Quando o servidor estiver de pé, rode este mesmo comando de novo e"
       c_dim "  escolha a opção 2 — eu te dou o passo seguinte."
       ;;
@@ -230,7 +203,7 @@ SSH
         c_dim "  Ok, não instalei nada. Escolha 1 ou 2 se precisar do outro caminho."
         continue
       fi
-      c_ylw "  Você está no servidor, mas o projeto ainda não foi baixado aqui."
+      c_ylw "  Você está no servidor, mas a pasta do projeto ainda não foi copiada para cá."
       comando_de_instalacao
       break
       ;;

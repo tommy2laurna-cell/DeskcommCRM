@@ -391,11 +391,6 @@ Reconstruído em HTML fluido (o original é 1680×600 fixo e quebra no celular),
 
 Removidos: **OpenClaw** e **Hermes** — não têm relação com o Deskcomm e diluem a conversão.
 
-> **Eyebrow:** Parceiro oficial
-> **Título:** Soberania com IA é na HostGator
-> **Corpo:** Datacenter no Brasil, sem transferência internacional de dados. É onde o DeskcommCRM foi feito para rodar.
-> **CTA:** Assinar a VPS com desconto da parceria →
-> **Microcopy:** link de parceria — assinar por ele apoia o projeto
 
 ---
 

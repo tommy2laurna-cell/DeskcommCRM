@@ -27,23 +27,17 @@
 
 > ### ☁️ Corre este CRM en producción con 1 comando
 >
-> DeskcommCRM se desarrolla en **alianza con HostGator**: el [`hostgator-setup-kit/`](hostgator-setup-kit/)
-> instala el CRM completo (app + WhatsApp + base de datos) en un VPS con un único comando, y el
-> [runbook de producción](docs/runbooks/waha-hostgator.md) ya asume ese entorno.
+> El [`hostgator-setup-kit/`](hostgator-setup-kit/) instala el CRM completo (app + WhatsApp + base de datos) en un VPS con un único comando.
 >
-> **[👉 Contratar el VPS de HostGator con el descuento de la alianza](https://www.hostgator.com.br/52708-141-3-52.html)** —
-> datacenter en São Paulo, ideal para WhatsApp funcionando 24/7. *(enlace de partner — contratar por él apoya el proyecto y te sale más barato)*
+> **Requisitos del VPS:** Docker Compose v2, 4 GB de RAM recomendados, puertos 80/443 abiertos y un dominio con registro A apuntando a la IP.
 >
-> **¿Todavía no tienes servidor?** Ejecuta esto **en tu propia computadora** (macOS, Linux o WSL).
-> Te dice qué plan contratar — con los números reales del runbook, no un "depende" — y te
-> devuelve el comando exacto para tu caso:
+> **¿Todavía no tienes servidor?** Ejecuta esto **en tu propia computadora** (macOS, Linux o WSL), desde la carpeta del proyecto. Verifica lo que necesita el servidor y te devuelve el comando exacto para tu caso:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/hostgator-setup-kit/comecar.sh | bash
+> bash hostgator-setup-kit/comecar.sh
 > ```
 >
-> *(¿prefieres leer antes de ejecutar? clona el repo y corre `bash hostgator-setup-kit/comecar.sh` —
-> no instala nada sin que confirmes.)*
+> *(no instala nada sin que confirmes.)*
 
 ---
 
@@ -85,7 +79,7 @@ lista. Si falta Docker, el instalador pregunta y lo instala solo.
 
 | Ítem | Dónde conseguirlo |
 |---|---|
-| **VPS con Docker** | [HostGator](https://www.hostgator.com.br/52708-141-3-52.html) (alianza) — o cualquier VPS con Docker. 4 GB de RAM recomendados |
+| **VPS con Docker** | Docker Compose v2, 4 GB de RAM recomendados, puertos 80/443 abiertos |
 | **Dominio** | Un registro **A** apuntando a la IP del VPS (ej.: `crm.tuempresa.com`) |
 | **Base de datos** | Cuenta gratis en [supabase.com](https://supabase.com) — 3 claves + la cadena de conexión del **Session pooler** |
 | **IA** | Una clave de **OpenRouter**, **Anthropic** u **OpenAI** — el instalador pregunta cuál quieres |
@@ -267,7 +261,7 @@ Toda pantalla tiene puerta en la navegación — el CI reprueba una pantalla que
 | **IA** | Vercel AI SDK v7 — OpenRouter, Anthropic, OpenAI y Google | El instalador pregunta cuál; se cambia después desde la pantalla |
 | **Validación** | Zod | Input externo, env, payloads |
 | **Observabilidad** | Sentry (scrub en error, transacción, span y breadcrumb) | Telemetría opt-in en la instalación |
-| **Hosting** | Cualquier VPS con Docker (HostGator/SP en la alianza) | App + WhatsApp + workers en tu propia máquina |
+| **Hosting** | Cualquier VPS con Docker | App + WhatsApp + workers en tu propia máquina |
 
 Detalles: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -446,7 +440,6 @@ Este es un proyecto **self-host**: cada persona corre el CRM en su **propia infr
 
 - **WAHA** ([devlikeapro](https://waha.devlikeapro.com/)) — motor de WhatsApp.
 - **Supabase** — Postgres + Auth + Storage + Realtime en una sola stack.
-- **HostGator** — la alianza de infraestructura que hizo posible el self-host de 1 comando.
 - **Anthropic**, **OpenAI** y **OpenRouter** — los proveedores de IA que el CRM sabe usar.
 - **shadcn/ui** — base de componentes.
 - La comunidad que nos llevó del e-commerce a clínicas, inmobiliarias, infoproductos y más allá — ustedes definieron lo que es este proyecto.
