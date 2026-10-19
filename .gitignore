@@ -19,6 +19,8 @@ build/
 .env*
 !.env.example
 !.env.hostgator.example
+# LRN: plantillas de perfil por cliente (solo placeholders; el empaquetador las escanea)
+!lrn/perfiles/*/.env.cliente.example
 
 # Testing & coverage
 coverage/
