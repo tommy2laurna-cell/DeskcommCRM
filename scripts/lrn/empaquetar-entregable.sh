@@ -30,8 +30,10 @@ escanear() {
   for p in "${PATRONES[@]}"; do
     nombre="${p%%|*}"; patron="${p#*|}"
     # -I ignora binarios. Se filtran placeholders obvios y se corta a archivo:línea (sin el valor).
+    # El filtro mira solo el CONTENIDO (después de "archivo:línea:"): si mirara la ruta, una clave
+    # real pegada en un .env.cliente.example pasaría por contener "example" en el nombre.
     out=$(grep -rInE --exclude-dir=.git -e "$patron" "$dir" 2>/dev/null \
-      | grep -viE 'your[-_]|changeme|placeholder|example|xxxx|<[a-z_-]+>|\$\{|process\.env|dummy|fake|test[-_]?(key|token|secret)|redacted' \
+      | grep -viE '^[^:]*:[0-9]+:.*(your[-_]|changeme|placeholder|example|xxxx|<[a-z_-]+>|\$\{|process\.env|dummy|fake|test[-_]?(key|token|secret)|redacted)' \
       | cut -d: -f1,2 | grep -vE "^$dir/($PERMITIDOS):" || true)
     if [ -n "$out" ]; then
       echo "SECRETO ($nombre):" >&2
@@ -53,7 +55,9 @@ verificar_envs() {
 }
 
 if [ "${1:-}" = "--escanear" ]; then
-  escanear "${2:?falta carpeta}"; verificar_envs "$2"; echo "OK: sin secretos ni .env"; exit 0
+  DIR="${2:?falta carpeta}"
+  command -v cygpath >/dev/null && DIR="$(cygpath -u "$DIR")"   # "C:/…" rompe el corte por ":"
+  escanear "$DIR"; verificar_envs "$DIR"; echo "OK: sin secretos ni .env"; exit 0
 fi
 
 cd "$(git rev-parse --show-toplevel)"
@@ -79,7 +83,13 @@ EXCLUIR=(
   ':(exclude)scripts/lrn'              # herramientas internas de LRN (este script)
   ':(exclude)LRN-ENTREGABLE.md'        # doc interna de LRN
 )
-rm -rf "$SALIDA" "$SALIDA.tar.gz"; mkdir -p "$SALIDA"
+# Solo se pisa una carpeta vacía o un entregable anterior (lleva la marca): un `salida` mal tipeado
+# (el Escritorio, el home) no se borra.
+MARCA=".lrn-entregable"
+if [ -d "$SALIDA" ] && [ -n "$(ls -A "$SALIDA")" ] && [ ! -f "$SALIDA/$MARCA" ]; then
+  echo "ERROR: $SALIDA ya existe, no está vacía y no es un entregable anterior. Elegí otra ruta." >&2; exit 1
+fi
+rm -rf "$SALIDA" "$SALIDA.tar.gz"; mkdir -p "$SALIDA"; : > "$SALIDA/$MARCA"
 trap 'rm -rf "$SALIDA" "$SALIDA.tar.gz"' ERR   # un entregable que falló no queda a medio armar
 
 git archive --format=tar HEAD -- . "${EXCLUIR[@]}" | tar -x -C "$SALIDA"
@@ -89,7 +99,7 @@ git archive --format=tar HEAD -- ':(glob).env*.example' ':(glob)**/.env*.example
 escanear "$SALIDA"
 verificar_envs "$SALIDA"
 
-tar -czf "$SALIDA.tar.gz" -C "$SALIDA" .
-echo "OK: $(find "$SALIDA" -type f | wc -l) archivos desde $(git rev-parse --short HEAD)"
+tar -czf "$SALIDA.tar.gz" --exclude="./$MARCA" -C "$SALIDA" .
+echo "OK: $(find "$SALIDA" -type f ! -name "$MARCA" | wc -l) archivos desde $(git rev-parse --short HEAD)"
 echo "Carpeta: $SALIDA"
 echo "Paquete: $SALIDA.tar.gz"
