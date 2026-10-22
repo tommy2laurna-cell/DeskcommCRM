@@ -39,8 +39,8 @@ toca no link que você mesmo fez para o `deskcomm-*` de outro clone.
 
 ── Uso ───────────────────────────────────────────────────────────────────────
 
-  curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/scripts/instalar-guias.sh | bash
-  curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/scripts/instalar-guias.sh | bash -s -- --remover
+  curl -fsSL https://raw.githubusercontent.com/tommy2laurna-cell/DeskcommCRM/main/scripts/instalar-guias.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/tommy2laurna-cell/DeskcommCRM/main/scripts/instalar-guias.sh | bash -s -- --remover
   bash scripts/instalar-guias.sh                 # instala ou atualiza (cópia da main)
   bash scripts/instalar-guias.sh --fonte .       # aponta para ESTE clone (quem edita os guias)
   bash scripts/instalar-guias.sh --remover       # desfaz
@@ -54,7 +54,7 @@ AJUDA
 
 set -euo pipefail
 
-REPO_URL="${DESKCOMM_REPO_URL:-https://github.com/melgarafael/DeskcommCRM.git}"
+REPO_URL="${DESKCOMM_REPO_URL:-https://github.com/tommy2laurna-cell/DeskcommCRM.git}"
 CACHE_PADRAO="$HOME/.deskcomm/guias"
 CACHE="${DESKCOMM_GUIAS_HOME:-$CACHE_PADRAO}"
 # Absoluto, como o --fonte: o link guarda o caminho LITERAL, e um relativo
