@@ -46,5 +46,5 @@ Sin medir en ejecución: ver `ESTADO.md`.
 ## Riesgos que hay que decirle al cliente
 
 - Baneo del número con WAHA (QR).
-- Las imágenes `ghcr.io/melgarafael/*` son del upstream y todavía no están
+- Las imágenes `ghcr.io/tommy2laurna-cell/*` son de LRN y todavía no están
   fijadas por versión (pendiente en `ESTADO.md`).

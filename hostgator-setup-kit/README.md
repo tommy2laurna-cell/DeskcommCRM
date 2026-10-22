@@ -21,7 +21,7 @@ Este kit sobe o **DeskcommCRM** no seu servidor VPS. Você tem dois caminhos:
 ## 🤖 Caminho fácil: deixe o assistente de código fazer
 
 1. Tenha um **VPS** (Docker Compose v2, 4 GB de RAM recomendados, portas 80/443, domínio com registro A) e acesse-o por SSH.
-2. Clone o repositório (`git clone --depth 1 https://github.com/melgarafael/DeskcommCRM.git deskcommcrm`)
+2. Clone o repositório (`git clone --depth 1 https://github.com/tommy2laurna-cell/DeskcommCRM.git deskcommcrm`)
    e abra a pasta no **Claude Code, Codex, Cursor, OpenCode ou Antigravity** dentro do VPS —
    ou jogue só esta pasta no chat: o `CLAUDE.md` daqui manda clonar e abre o guia.
 3. Diga: *"instala o DeskcommCRM pra mim"*. O guia `deskcomm-instalar` conduz tudo —

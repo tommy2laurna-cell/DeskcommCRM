@@ -53,7 +53,7 @@ const PUBLICA = fs.readFileSync(path.join(RAIZ, ".github/workflows/publish-image
 const ENV_EXEMPLO = fs.readFileSync(path.join(RAIZ, ".env.hostgator.example"), "utf8");
 
 /** O valor literal que este repositório publica. A âncora. */
-const NAMESPACE_DESTE_REPO = "ghcr.io/melgarafael";
+const NAMESPACE_DESTE_REPO = "ghcr.io/tommy2laurna-cell";
 
 /**
  * Um fork que publica as próprias imagens muda `IMG_NS` — e precisa mudar junto
@@ -160,7 +160,7 @@ describe("o default do compose diz o mesmo que o kit", () => {
 
 describe("o kit aponta para o que o CI realmente publica", () => {
   it("os defaults de código e os labels de origem apontam para este repositório", () => {
-    const repo = "https://github.com/melgarafael/DeskcommCRM";
+    const repo = "https://github.com/tommy2laurna-cell/DeskcommCRM";
     const install = fs.readFileSync(path.join(RAIZ, "hostgator-setup-kit", "install.sh"), "utf8");
     expect(install).toContain(`REPO_URL="\${REPO_URL:-${repo}.git}"`);
     // LRN: o comecar.sh não baixa nada do upstream — instala a pasta entregue.
