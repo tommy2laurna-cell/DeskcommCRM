@@ -128,7 +128,7 @@ if [ -n "$env_novas" ]; then
 fi
 
 # ── 6. Documento de autoridade tocado ────────────────────────────────────────
-autoridade="$(echo "$diff_nomes" | grep -E '^(CLAUDE|AGENTS|CONTRIBUTING|ARCHITECTURE|README|SECURITY)\.md$|^docs/(doctrine|runbooks|adr|index\.md|current-state|harness-audit|threat-model|DEPLOY-CHECKLIST|SETUP)|^triagem/|^\.agents/skills/' || true)"
+autoridade="$(echo "$diff_nomes" | grep -E '^(CLAUDE|AGENTS|CONTRIBUTING|ARCHITECTURE|README|SECURITY)\.md$|^docs/(doctrine|runbooks|adr|index\.md|current-state|harness-audit|threat-model|DEPLOY-CHECKLIST|SETUP)|^\.agents/skills/' || true)"
 [ -z "$autoridade" ] && nao "nenhum documento de autoridade tocado" || olhe "documento(s) de autoridade tocado(s): releia as afirmações de estado do trecho ('é obrigatório', 'ainda não', 'N de M') e troque número por comando — $(echo "$autoridade" | tr '\n' ' ')"
 
 # ── 7. Teste que falta ───────────────────────────────────────────────────────
@@ -139,11 +139,6 @@ if [ -n "$codigo" ] && [ -z "$testes" ]; then
 elif [ -n "$testes" ]; then
   ok "teste(s) no diff: $(echo "$testes" | wc -l | tr -d ' ') — sabote o conserto e confira que ficam vermelhos"
 fi
-specs="$(git diff --diff-filter=A --name-only "$B" HEAD | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
-for s in $specs; do
-  nome="$(basename "$s")"
-  grep -q "$nome" .github/workflows/e2e.yml && ok "spec $nome está no e2e.yml" || trava "spec nova $nome fora do .github/workflows/e2e.yml — entre em SPECS_PARTE_N ou FORA_DO_CI com motivo (tests/unit/e2e-cobertura-completa.test.ts reprova)"
-done
 
 # ── 8. Identidade dos commits ────────────────────────────────────────────────
 autores="$(git log --format='%an <%ae>' "$B..HEAD" | sort -u)"

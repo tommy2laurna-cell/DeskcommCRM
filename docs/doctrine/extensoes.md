@@ -13,7 +13,7 @@ Esta é a **lei**. As decisões e o que foi recusado vivem nos documentos de dec
 | o critério núcleo × extensão aprovado e o desenho do programa inteiro | `Decisão Implementações/PROG-017 — Extensões — arquitetura e contratos.md` (documento interno de decisão, fora deste repositório; o que vale para PR está nesta doutrina) |
 | as políticas de publicação, incidentes e métricas (Rafael aprovou A nas três) | `Decisão Implementações/DEC-004 — Extensões — publicação, incidentes e métricas.md` (documento interno; as três políticas estão no não-negociável 13) |
 | o contrato que existe hoje (pacote, catálogo, RPCs, portas HTTP, versões) | [`../specs/extensoes-declarativas-v1.md`](../specs/extensoes-declarativas-v1.md) |
-| classificar o destino de um PR de contribuidor | [`../../triagem/TRIAGEM.md`](../../triagem/TRIAGEM.md), seção 2-bis |
+| classificar o destino de um PR de contribuidor | [`../../CLAUDE.md`](../../CLAUDE.md), regra 18 |
 | o mapa das peças e das arestas | [`../architecture/extensoes-declarativas.architecture.json`](../architecture/extensoes-declarativas.architecture.json) |
 
 ---
