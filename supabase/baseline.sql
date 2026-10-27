@@ -27185,6 +27185,15 @@ alter table public.ai_reply_drafts
 
 notify pgrst, 'reload schema';
 
+-- ---- a moeda padrão passa a ser ARS (migration 0275) ----
+-- Só o DEFAULT; linha existente fica como está. Vai DEPOIS do bloco da 0208, que
+-- reaplica `default 'BRL'` em `organizations.currency` a cada update.
+alter table public.organizations
+  alter column currency set default 'ARS';
+
+alter table public.crm_leads
+  alter column currency set default 'ARS';
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna

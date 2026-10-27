@@ -124,7 +124,6 @@ export function NewLeadDialog({
       pipeline_id: pipelineId,
       stage_id: values.stage_id,
       title: values.title.trim(),
-      currency: "BRL",
       source: "manual",
       tags,
     };

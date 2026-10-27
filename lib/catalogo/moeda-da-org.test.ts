@@ -33,6 +33,7 @@ describe("moedaDaOrganizacao", () => {
     const moeda = await moedaDaOrganizacao(supabaseCom(null), "org-1");
 
     expect(moeda).toBe(MOEDA_PADRAO);
+    expect(moeda).toBe("ARS");
     // ⚠️ O CASO QUE O REVISOR ACHOU: a leitura falhando degradava para 'BRL'
     // no MESMO silêncio que a migração 0208 diz ter corrigido — "o dado está
     // certo e o rótulo mente". Falhar calado aqui não deixa o produto sem

@@ -22,7 +22,6 @@ interface FormShape {
   name?: string;
   email?: string;
   phone_number?: string;
-  cpf?: string;
   tagsRaw?: string;
 }
 
@@ -51,7 +50,7 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<FormShape>({
-    defaultValues: { name: nomeInicial ?? "", email: "", phone_number: "", cpf: "", tagsRaw: "" },
+    defaultValues: { name: nomeInicial ?? "", email: "", phone_number: "", tagsRaw: "" },
   });
 
   async function onSubmit(values: FormShape) {
@@ -65,7 +64,6 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
     if (values.name?.trim()) payload.name = values.name.trim();
     if (values.email?.trim()) payload.email = values.email.trim();
     if (values.phone_number?.trim()) payload.phone_number = values.phone_number.trim();
-    if (values.cpf?.trim()) payload.cpf = values.cpf.trim();
     if (tags.length) payload.tags = tags;
 
     const parsed = contactCreateSchema.safeParse(payload);
@@ -116,10 +114,6 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
               placeholder="+5491112345678"
               {...form.register("phone_number")}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cpf">{t("CPF (opcional)")}</Label>
-            <Input id="cpf" placeholder="00000000000" {...form.register("cpf")} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="tagsRaw">{t("Tags (separadas por vírgula)")}</Label>
