@@ -113,7 +113,7 @@ describe("POST /api/v1/products — a moeda vem da organização", () => {
 
   /**
    * A leitura da organização pode falhar (linha some, RLS nega). `moedaDaOrganizacao()`
-   * escreve `MOEDA_PADRAO` ('BRL') EXPLÍCITO no insert — não é o `default` da
+   * escreve `MOEDA_PADRAO` ('ARS') EXPLÍCITO no insert — não é o `default` da
    * coluna que decide, porque a rota manda um valor no corpo do insert de
    * qualquer forma. O nome deste teste dizia o contrário antes da revisão: o
    * `default` da coluna nunca chega a ser exercitado por este caminho.

@@ -3,6 +3,7 @@ import { Droppable } from "@hello-pangea/dnd";
 import { useRef, type CSSProperties } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
+import { formatCents, MOEDA_PADRAO } from "@/lib/money";
 import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { buildCardInput } from "@/lib/kanban/card-state";
@@ -33,18 +34,6 @@ interface StageColumnProps {
   onSelectMany?: (leadIds: string[], marcar: boolean) => void;
   /** Abrir o dossiê — atravessa o board até o card, como `pulses`. */
   onOpen?: (leadId: string) => void;
-}
-
-function formatBRL(cents: number): string {
-  try {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      maximumFractionDigits: 0,
-    }).format(cents / 100);
-  } catch {
-    return `R$ ${(cents / 100).toFixed(0)}`;
-  }
 }
 
 export function StageColumn({
@@ -138,7 +127,7 @@ export function StageColumn({
 
       {totalCents > 0 && (
         <div className="border-b border-border px-3 py-1.5 text-[11px] tabular-nums text-text-muted">
-          {formatBRL(totalCents)}
+          {formatCents(totalCents, MOEDA_PADRAO)}
         </div>
       )}
 

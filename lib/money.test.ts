@@ -66,6 +66,7 @@ describe("formatCents", () => {
    */
   it("formata cada moeda na convenção de quem a usa", () => {
     expect(semNbsp(formatCents(24990, "BRL"))).toBe("R$ 249,90");
+    expect(semNbsp(formatCents(123456, "ARS"))).toBe("$ 1.234,56");
     expect(semNbsp(formatCents(24990, "MXN"))).toBe("$249.90");
     expect(semNbsp(formatCents(24990, "USD"))).toBe("$249.90");
   });
