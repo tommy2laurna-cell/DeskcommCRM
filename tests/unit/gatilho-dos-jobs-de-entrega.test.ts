@@ -65,20 +65,6 @@ const DIR = join(process.cwd(), ".github/workflows");
  */
 const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string }> = {
   // --- a cadeia que leva o conserto até a VPS ---------------------------------
-  "release.yml::abrir-pr-de-release": {
-    condicao: "github.event_name == 'workflow_dispatch'",
-    efeito:
-      "Este job é quem monta o PR de release a partir dos fragmentos de `.changes/`. " +
-      "Desligá-lo faz nenhuma versão ser fechada — sem erro em lugar nenhum.",
-  },
-  "release.yml::cortar-tag": {
-    condicao: "github.event_name == 'push'",
-    efeito:
-      "Este job é quem CRIA E EMPURRA a tag `vX.Y.Z`, que é o gatilho da atualização " +
-      "do parque instalado inteiro. Desligá-lo faz a release parar em silêncio: nenhuma " +
-      "tag nasce, nenhuma imagem sai, `stable` congela, e a descoberta é um cliente " +
-      "rodando `update.sh` e não recebendo nada.",
-  },
   "publish-image.yml::a-tag-veio-da-main": {
     condicao: null,
     efeito:
@@ -173,40 +159,6 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "workflow chamava desde 2026-08-27, e `test:db` sozinho mede um banco VAZIO — constraint " +
       "que só quebra com linha existente passava verde.",
   },
-  "e2e.yml::e2e-parte": {
-    condicao: null,
-    efeito: "São as partes da matriz Playwright; sem elas o `e2e` fica sem nada para ler.",
-  },
-  "e2e.yml::e2e": {
-    condicao: "always()",
-    efeito:
-      "Este é o check obrigatório `e2e`, a fachada da matriz. Precisa de `always()` para " +
-      "ler o resultado das partes e reprovar `skipped`.",
-  },
-  "perf.yml::build-and-size": {
-    condicao: null,
-    efeito: "Este é o check obrigatório `build-and-size` (`pnpm build` em Node 22).",
-  },
-
-  // --- e o que legitimamente tem interruptor -----------------------------------
-  "acolhida.yml::acolher": {
-    condicao:
-      "github.repository_owner == 'melgarafael' && " +
-      "github.event.pull_request.head.repo.full_name != github.repository",
-    efeito:
-      "Este job posta a acolhida automática em PR de fork — a resposta em minutos que existe " +
-      "porque três contribuidores fecharam o próprio PR achando que tinham errado. As duas " +
-      "condições são deliberadas e cada uma barra um caminho: sem a de fork, PR interno recebe " +
-      "boas-vindas de robô; sem a de dono, o fork de cada self-hoster herda um bot que fala pela " +
-      "gente no repositório dele, prometendo um prazo que ninguém lá concordou em cumprir.",
-  },
-  "relogio.yml::tick": {
-    condicao: "vars.RELOGIO_LIGADO == '1' || github.event_name == 'workflow_dispatch'",
-    efeito:
-      "Este é o relógio que bate o cron. A condição aqui é um interruptor DELIBERADO " +
-      "(`vars.RELOGIO_LIGADO`), não uma adaptação de fork — mas ela fica no mapa para " +
-      "que trocar a variável por outra coisa continue passando por revisão.",
-  },
 };
 
 interface JobLido {
@@ -282,7 +234,7 @@ describe("nenhum job pode ser desligado por uma condição — `skipped` conta c
     // Controle positivo. Sem ele, um recorte que parou de casar devolve lista
     // vazia, o mapa vira "todo elemento de nada", e o gate fica verde vigiando
     // nada — o modo de falha mais comum desta classe de teste.
-    expect(jobs.length, "jobs lidos em .github/workflows").toBeGreaterThanOrEqual(10);
+    expect(jobs.length, "jobs lidos em .github/workflows").toBeGreaterThanOrEqual(9);
     expect(
       jobs.filter((j) => j.condicao !== null).map(chave).sort(),
       "o recorte de `if:` está cego — nenhuma condição foi lida, e o mapa passaria por vacuidade",

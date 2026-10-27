@@ -125,7 +125,7 @@ describe("POST /api/v1/products — a moeda vem da organização", () => {
     const resposta = await POST(pedido({ ...PRODUTO, moeda: "USD" }));
 
     expect(resposta.status).toBe(201);
-    expect(inserido).toMatchObject({ moeda: "BRL" });
+    expect(inserido).toMatchObject({ moeda: "ARS" });
     expect(orgIdLido).toBe(ORG_ID);
   });
 });

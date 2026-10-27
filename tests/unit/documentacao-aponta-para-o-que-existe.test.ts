@@ -65,6 +65,23 @@ const PONTEIROS_MORTOS_ACEITOS = new Set([
 ]);
 
 /**
+ * Fork LRN: os workflows do autor (release, e2e, perf, acolhida, relógio) e os
+ * testes que os vigiavam saíram em 86d40e7 — este fork publica só via
+ * `publish-image.yml`. Os documentos herdados seguem citando-os; vale para
+ * qualquer documento, e só para estes alvos.
+ */
+const REMOVIDOS_NO_FORK = new Set([
+  ".github/workflows/release.yml",
+  ".github/workflows/e2e.yml",
+  ".github/workflows/perf.yml",
+  ".github/workflows/acolhida.yml",
+  ".github/workflows/relogio.yml",
+  "tests/unit/e2e-cobertura-completa.test.ts",
+  "tests/unit/release-chega-na-lp.test.ts",
+  "tests/unit/acolhida-nao-toca-no-fork.test.ts",
+]);
+
+/**
  * Nomes ilustrativos: `lib/foo/bar.ts` não é ponteiro, é exemplo.
  *
  * O segmento tem que terminar ali — `(?=\/|\.|$)`. Sem essa âncora, a alternativa
@@ -125,6 +142,7 @@ describe("documentação — o que ela aponta existe", () => {
         // Sem decodificar, um link VÁLIDO para arquivo existente reprovava como morto.
         if (fs.existsSync(path.resolve(base, decodificar(alvo)))) continue;
         if (PONTEIROS_MORTOS_ACEITOS.has(`${doc}::${alvo}`)) continue;
+        if (REMOVIDOS_NO_FORK.has(path.relative(RAIZ, path.resolve(base, alvo)).replaceAll("\\", "/"))) continue;
         mortos.push(`${doc} → ${alvo}`);
       }
     }
@@ -142,6 +160,7 @@ describe("documentação — o que ela aponta existe", () => {
         if (!alvo || EH_PLACEHOLDER.test(alvo)) continue;
         if (fs.existsSync(path.join(RAIZ, alvo))) continue;
         if (PONTEIROS_MORTOS_ACEITOS.has(`${doc}::${alvo}`)) continue;
+        if (REMOVIDOS_NO_FORK.has(alvo)) continue;
         mortos.push(`${doc} → ${alvo}`);
       }
     }
