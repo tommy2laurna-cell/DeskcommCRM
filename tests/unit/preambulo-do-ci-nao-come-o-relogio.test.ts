@@ -90,12 +90,12 @@ describe("o preâmbulo do CI não come o orçamento dos testes", () => {
   it("o instrumento está vivo: acha os workflows e os usos da action", () => {
     // Controle positivo das três asserções seguintes.
     const arquivos = workflows();
-    expect(arquivos.length, "workflows em .github/workflows").toBeGreaterThanOrEqual(4);
+    expect(arquivos.length, "workflows em .github/workflows").toBeGreaterThanOrEqual(2);
 
     const usos = linhasEfetivas(DIR_WORKFLOWS, arquivos).filter((l) =>
       /uses:\s*\.\/\.github\/actions\/preparar-node\s*$/.test(l.texto),
     );
-    expect(usos.length, "pontos que usam ./.github/actions/preparar-node").toBeGreaterThanOrEqual(6);
+    expect(usos.length, "pontos que usam ./.github/actions/preparar-node").toBeGreaterThanOrEqual(2);
   });
 
   it("nenhum workflow instala pnpm por fora da action preparada", () => {

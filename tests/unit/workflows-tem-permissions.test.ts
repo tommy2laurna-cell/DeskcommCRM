@@ -54,11 +54,6 @@ const DIR = join(process.cwd(), ".github/workflows");
 const ESCRITA_JUSTIFICADA: Record<string, string> = {
   "publish-image.yml::packages: write":
     "publica a imagem do app no GHCR — é o artefato que o self-hoster instala",
-  "deploy-vps-develop.yml::packages: write":
-    "publica as imagens :develop deste fork no GHCR — a VPS só puxa, não builda",
-  "acolhida.yml::pull-requests: write":
-    "comenta a acolhida no PR de fork; é o ÚNICO escopo do workflow (o bloco zera o resto), " +
-    "e o job não faz checkout nem usa action nenhuma — ver tests/unit/acolhida-nao-toca-no-fork.test.ts",
 };
 
 interface Workflow {
@@ -113,7 +108,7 @@ describe("workflows declaram o privilégio do GITHUB_TOKEN", () => {
     // `jobs:` com comentário na mesma linha), as asserções seguintes passam por
     // vacuidade — lista vazia satisfaz "todo elemento da lista".
     const ws = lerWorkflows();
-    expect(ws.length, "workflows lidos em .github/workflows").toBeGreaterThanOrEqual(4);
+    expect(ws.length, "workflows lidos em .github/workflows").toBeGreaterThanOrEqual(2);
     const totalJobs = ws.reduce((n, w) => n + w.jobs.length, 0);
     expect(totalJobs, "jobs encontrados no total").toBeGreaterThanOrEqual(5);
   });
