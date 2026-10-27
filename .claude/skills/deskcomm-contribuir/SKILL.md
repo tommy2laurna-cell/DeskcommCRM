@@ -3,7 +3,6 @@ name: deskcomm-contribuir
 description: 'Guia de contribuição ao DeskcommCRM para quem vai mexer no código e abrir um pull request, sobretudo de um fork. Use SEMPRE que a pessoa disser que vai contribuir, corrigir um bug, implementar algo, abrir ou atualizar um PR, criar uma migration, resolver conflito com a main, ou perguntar "como eu testo isso", "minha branch está atrasada?", "por que o CI ficou vermelho" — e antes de qualquer commit em clone que não seja do mantenedor. É o espelho da triagem: mede ANTES do PR o que o mantenedor mede depois (branch atrasada, tripla de migration, marca do fork no diff, fragmento de release, teste que falta, prova em tela), arma os hooks de git e evita retrabalho e PR recusado.'
 metadata:
   publico: contribuidor externo, dev de agência, fork
-  espelho-de: triagem/TRIAGEM.md
 ---
 
 # Contribuir para o DeskcommCRM sem retrabalho
@@ -151,8 +150,8 @@ local inteira, na ordem, com o que precisa instalado: `references/receita-e2e-lo
 Docker ou sem tempo: mande o que conseguiu provar (unit + o que testou na mão, passo a passo) e
 diga que a prova de tela ficou com o mantenedor — é o combinado público, não uma falha.
 
-Spec nova entra em `SPECS_PARTE_N` do `.github/workflows/e2e.yml` (ou em `FORA_DO_CI` com o
-motivo escrito); o teste `tests/unit/e2e-cobertura-completa.test.ts` reprova spec órfã.
+Este fork não roda e2e no CI: spec nova roda na sua máquina (`pnpm test:e2e`), e a prova é a
+corrida que você mostra no PR.
 
 ## Passo 7 — o fragmento de release (não o CHANGELOG)
 

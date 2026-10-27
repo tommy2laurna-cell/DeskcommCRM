@@ -52,37 +52,9 @@ preso com a mensagem visível na inbox.
 Confirme nos logs: `POST /api/v1/webhooks/waha` e `POST /api/v1/webhooks/in`
 têm de chegar no mesmo lugar em que o tick bate.
 
-## Opção A — GitHub Actions (grátis em repo público)
+## Ligar — cron-job.org (grátis, a cada 1 minuto)
 
-Arquivo: [`.github/workflows/relogio.yml`](../../.github/workflows/relogio.yml).
-
-**Limitação:** o `schedule:` do Actions **só roda na branch default (`main`)**.
-Se o workflow existir só numa branch de trabalho, o cron **nunca** dispara.
-
-### Ligar
-
-1. Mergeie `.github/workflows/relogio.yml` em `main` (ou copie o arquivo).
-2. No GitHub do **seu** fork/instalação → Settings → Secrets and variables:
-
-| Tipo | Nome | Valor |
-|------|------|--------|
-| Variable | `RELOGIO_LIGADO` | `1` |
-| Secret | `RELOGIO_APP_URL` | `https://SEU-DOMINIO` (sem barra no fim) |
-| Secret | `RELOGIO_SECRET` | o mesmo `INTERNAL_SECRET` do `.env` da sua instalação |
-
-3. Actions → **relogio** → Run workflow (teste manual).
-4. Espere o schedule `*/5` (o GitHub atrasa; 5–15 min é normal).
-
-```bash
-# Via CLI (com permissão de secrets no repo)
-gh variable set RELOGIO_LIGADO -R SEU_USER/DeskcommCRM -b 1
-gh secret set RELOGIO_APP_URL -R SEU_USER/DeskcommCRM -b "https://SEU-DOMINIO"
-gh secret set RELOGIO_SECRET -R SEU_USER/DeskcommCRM -b "$INTERNAL_SECRET"
-```
-
-## Opção B — cron-job.org (grátis, a cada 1 minuto)
-
-Melhor latência que o Actions. Conta free permite job a cada minuto.
+Este fork não traz workflow de relógio no GitHub Actions; o cron é de fora. Conta free permite job a cada minuto.
 
 1. Crie conta em [https://cron-job.org](https://cron-job.org).
 2. Create cronjob:

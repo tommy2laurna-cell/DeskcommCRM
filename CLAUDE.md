@@ -409,47 +409,18 @@ No CI não há `UPSTASH` nenhum, então lá o caminho é o contador em memória 
 
 **Os invariantes não estão no `test:unit`.** `vitest.config.ts` exclui `tests/invariants/**` de propósito: essa suíte precisa de um Postgres real e roda via `vitest.db.config.ts`, orquestrada por `scripts/test-db.sh`. Rodar só `pnpm test:unit` e concluir "está tudo verde" é um falso verde — o isolamento RLS não foi exercitado.
 
-Checks **obrigatórios** na branch protection da `main` (verificado na configuração, não só no papel):
+Os jobs que rodam em PR e na `main` deste fork (os workflows de `perf`, `e2e` e release do autor saíram em 86d40e7):
 
 - **`verify`** (`ci.yml`) — typecheck + lint + test:unit.
 - **`invariants`** (`ci.yml`) — **job de fachada**: ele não roda suíte nenhuma; reprova quando a matriz `invariants-majors` não fecha em `success`. Quem roda é a matriz, uma perna por major do Postgres que o produto diz suportar, e cada perna faz duas passadas: `pnpm test:db` (baseline em modo install com `ON_ERROR_STOP=1` e update, mais os invariantes, incluindo o isolamento RLS entre 2 organizações) e `pnpm test:db:update` (atualização de um banco COM dados). Para saber quais majors hoje, pergunte ao arquivo em vez de a esta linha: `awk '/^  invariants-majors:/,/^  [a-z-]+:/' .github/workflows/ci.yml | grep -A6 'matrix:'`.
-- **`build-and-size`** (`perf.yml`) — `pnpm build` em Node 22.
-- **`e2e`** (`e2e.yml`) — sobe Supabase local, aplica o `baseline.sql` e roda **todas as specs Playwright menos as que `FORA_DO_CI` declara**. O número saiu daqui de propósito: ele apodreceu **cinco** vezes (a quinta em 2026-08-24, quando `inbox-quem-manda.spec.ts` entrou), e a condição que o PR #242 pôs para parar de recontar já tinha vencido na quarta. Quem precisa do número roda o comando abaixo — comando não envelhece. Quais ficam de fora, e por quê, é o que a própria variável diz — **não confie nesta linha, leia-a**:
+- **Sem `build-and-size` e sem `e2e` no CI.** O `pnpm build` roda dentro do `Dockerfile` da imagem do app, então quem o cobre é `imagens-ok`. As specs Playwright de `tests/e2e/` rodam só na máquina, com `pnpm test:e2e` (receita em `.agents/skills/deskcomm-contribuir/references/receita-e2e-local.md`): quem declara pronta uma mudança de UI mostra a corrida local, porque o CI não a faz.
+- **`imagens-ok`** (`publish-image.yml`) — reprova quando qualquer uma das três imagens Docker não constrói. Em tag `v*` o mesmo workflow publica no GHCR, e o job `a-tag-veio-da-main` recusa tag de commit fora da `main`.
 
-  ```bash
-  git show origin/main:.github/workflows/e2e.yml | \
-    python3 -c "import sys,re; y=sys.stdin.read(); print(sorted({s for _,c in re.findall(r'(FORA_DO_CI):\s*>-\n((?:[ ]{8,}.*\n)+)',y) for s in re.findall(r'[a-z0-9-]+\.spec\.ts',c)}))"
-  ```
+Se algum deles é **obrigatório** é configuração da branch protection, que vive fora do repositório. Pergunte a ela, não a este arquivo (HTTP 404 = `main` sem proteção, nenhum check obrigatório):
 
-  Esta frase já dizia "a **única** de fora é `vps-fresh-onboarding`" e estava errada: em 2026-09-04 a variável listava **duas** (`inbox-tempo-real` entrou depois). É o mesmo defeito que o parágrafo acima descreve — afirmação de estado que envelhece —, cometido na frase seguinte à que o denuncia. O que continua verdade e é o que importa: `vps-fresh-onboarding` é a **P0** da doutrina de QA Visual, então `e2e` verde **não** prova a jornada de instalação fresca, que é o produto que se vende.
-
-  **Não confie em `grep` no arquivo inteiro.** `grep -oE '[a-z0-9-]+\.spec\.ts' .github/workflows/e2e.yml | sort -u | wc -l` conta quem é CITADO, não quem é INVOCADO: a `FORA_DO_CI` é uma variável YAML como as outras e entra na conta. (Até 2026-08-14 este parágrafo culpava "menções em comentários", e isso é falso — medido, o conjunto de specs citadas fora de variável é **vazio**.) O que roda são as `SPECS_PARTE_*`:
-
-  ```bash
-  ls tests/e2e/*.spec.ts | wc -l                    # quantas existem
-  python3 - <<'PY'                                  # quantas o CI invoca
-  import re
-  y = open(".github/workflows/e2e.yml", encoding="utf-8").read()
-  print(len({s for _, c in re.findall(r'(SPECS_PARTE_\d+):\s*>-\n((?:[ ]{8,}.*\n)+)', y)
-               for s in re.findall(r'[a-z0-9-]+\.spec\.ts', c)}))
-  PY
-  ```
-
-  **Por que não há mais número aqui.** O conserto que este parágrafo pedia era pôr a prosa sob gate — `tests/unit/e2e-cobertura-completa.test.ts` cobrando também o texto daqui. Tirar o número é melhor e mais barato: não há o que policiar, e a diferença entre disco e CI segue vigiada onde importa, no próprio teste, que reprova toda spec nova que não esteja em `SPECS_PARTE_*` ou em `FORA_DO_CI` **com motivo escrito**. Prosa que nenhum gate lê é prosa que diverge; prosa que não afirma número não tem como divergir.
-- **`imagens-ok`** (`publish-image.yml`) — reprova quando qualquer uma das três imagens Docker não constrói. **É obrigatório desde 2026-08-13**; este arquivo dizia o contrário em outro parágrafo (ver a doutrina de packaging acima, já corrigida).
-
-Todos os **cinco** são **obrigatórios** — medido em 2026-08-14 na branch protection:
-
-```console
-$ gh api repos/melgarafael/DeskcommCRM/branches/main/protection --jq '.required_status_checks.contexts|join(", ")'
-verify, build-and-size, invariants, e2e, imagens-ok
+```bash
+gh api repos/tommy2laurna-cell/DeskcommCRM/branches/main/protection   --jq '.required_status_checks.contexts|join(", ")'
 ```
-
-Duas correções que este bloco já pagou: o `e2e` entrou para a lista depois de o arquivo ser escrito, e
-a versão anterior dizia que ele "ainda não é obrigatório"; depois o `imagens-ok` entrou e o arquivo
-seguiu dizendo "quatro". Uma triagem que leia qualquer uma dessas versões mede contra a régua errada —
-que é o modo de falha nº 1 do procedimento de triagem. **Reconfira na fonte antes de confiar em
-qualquer lista aqui**, com o comando acima.
 
 Ao mexer em schema, RLS, RBAC, atribuição, escopo, roteamento, follow-up, webhooks ou automações: rode `pnpm test:db` **localmente** antes de abrir PR. É o único caminho que exercita o `baseline.sql` que o self-hoster realmente aplica.
 
@@ -606,12 +577,10 @@ Antes de declarar uma task pronta:
     presença num check obrigatório reprovaria PR de Dependabot, PR de fork, e o próprio PR
     de release, que consome os fragmentos e deixa o diretório vazio. A presença é cobrada
     aqui, e por quem revisa.
-    **Toda versão publicada aparece na página de changelog da LP** (deskcomm.com.br/changelog,
-    pt-BR/en/es). Ninguém escreve no site: a LP lê o `CHANGELOG.md` da `main`, e o último passo
-    do corte (`release.yml`, job `cortar-tag`) reprova quando a versão não chegou. O texto do
-    fragmento é, portanto, nota pública. Enquanto as três páginas não responderem 200 esse passo
-    reprova TODO corte — a vitrine vem de um PR do `deskcomm-site`, e o `curl` que diz em que
-    estado ela está abre a seção. Lei: seção "A vitrine" de `versionamento.md`.
+    **Este fork não tem LP nem corte automático.** A seção entra no `CHANGELOG.md` com
+    `pnpm release:cortar`, a tag `v*` é empurrada à mão de um commit da `main`, e
+    `publish-image.yml` publica as imagens a partir dela. O texto do fragmento é a nota que o
+    operador lê na tela de atualização.
 
 18. **Se o PR muda comportamento, ele declara o destino: núcleo, extensão, ambos ou
     infraestrutura** (lei em [`docs/doctrine/extensoes.md`](docs/doctrine/extensoes.md)), com a razão

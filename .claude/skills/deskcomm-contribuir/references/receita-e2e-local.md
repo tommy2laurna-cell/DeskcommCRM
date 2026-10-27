@@ -1,10 +1,8 @@
 # Rodar uma spec de tela na sua máquina — a receita do CI, passo a passo
 
-O CI (`.github/workflows/e2e.yml`) sobe um Supabase local, aplica o `baseline.sql` (o mesmo que o
-`install.sh` aplica numa VPS), constrói o app em modo produção e roda as specs Playwright em três
-partes. Esta página é a mesma receita, para uma pessoa, uma spec de cada vez. Nenhum documento do
-repositório a descrevia fora do próprio workflow — se algo aqui divergir do `e2e.yml`, vale o
-workflow.
+Este fork não roda e2e no CI (o workflow do autor saiu em 86d40e7), então esta receita é o único
+caminho: sobe um Supabase local, aplica o `baseline.sql` (o mesmo que o `install.sh` aplica numa
+VPS), constrói o app em modo produção e roda as specs Playwright, uma spec de cada vez.
 
 ## O que precisa estar instalado
 
@@ -84,9 +82,6 @@ O `playwright.config.ts` sobe o app (`next start`) sozinho. Falhou? `--trace on`
   exato, contagem — "o elemento existe" não prova nada.
 - Evidência versionada em `evidence/` (não em `.superpowers/`, que é ignorado pelo git).
 - Registre a jornada em `docs/testing/user-journey-map.md` com prioridade (`[P0]` primeira impressão).
-- A spec nova entra em `SPECS_PARTE_N` do `.github/workflows/e2e.yml` — ou em `FORA_DO_CI` com o
-  motivo escrito, se depender de WAHA/Resend/Nuvemshop/Redis reais. O teste
-  `tests/unit/e2e-cobertura-completa.test.ts` reprova spec órfã.
 - `pnpm typecheck` depois de escrever (a spec é TypeScript e o typecheck cobre `tests/`).
 
 ## 6. Quando não dá

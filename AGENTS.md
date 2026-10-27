@@ -150,26 +150,14 @@ cobre os dois últimos (liste em vez de acreditar nesta linha:
 `awk '/^  verify:/,/^  invariants-majors:/' .github/workflows/ci.yml | grep -A1 'name:'`);
 `invariants` = fachada sobre a matriz `invariants-majors`, que roda `pnpm test:db` (isolamento
 RLS + invariantes de governança) e `pnpm test:db:update` (atualizar banco COM dados) uma vez por
-major de Postgres suportado. `.github/workflows/perf.yml`: `build-and-size` = `pnpm build`.
-`.github/workflows/e2e.yml` roda as specs Playwright contra um Supabase local de verdade com
-o `baseline.sql` aplicado — o mesmo banco que o self-hoster tem. **É check obrigatório** — a
-data de ativação não é auditável pelo repositório, e a lista viva está logo abaixo, com o
-comando ao lado. **Não há número aqui de propósito**: esta linha já afirmou uma contagem exata
-de specs e "a única de fora", e as duas envelheceram — a suíte cresce toda semana e a lista de
-exceções muda com ela. Quem fica de fora é o que a própria variável declara; leia, não confie:
-O CI tem cinco checks obrigatórios na `main`: `verify`, `build-and-size`, `invariants`, `e2e`,
-`imagens-ok`. Não confie nesta lista — reconte antes de citar:
+major de Postgres suportado. `.github/workflows/publish-image.yml`: `imagens-ok` = as três
+imagens constroem (a do app roda `pnpm build`). Não há workflow de e2e nem de release neste fork
+(saíram em 86d40e7): as specs Playwright rodam só local, com `pnpm test:e2e`. Se algum check é
+obrigatório na `main` é configuração do GitHub, não do repositório — pergunte (HTTP 404 = sem
+proteção):
 
 ```bash
-gh api repos/melgarafael/DeskcommCRM/branches/main/protection \
-  --jq '.required_status_checks.contexts|join(", ")'
-```
-
-`e2e` roda três partes em paralelo; as specs de fora estão declaradas, **com motivo escrito**, em
-`FORA_DO_CI` dentro de `.github/workflows/e2e.yml`. Leia em vez de supor:
-
-```bash
-git show origin/main:.github/workflows/e2e.yml | grep -A4 'FORA_DO_CI:'
+gh api repos/tommy2laurna-cell/DeskcommCRM/branches/main/protection   --jq '.required_status_checks.contexts|join(", ")'
 ```
 
 ## Embedded Assistant Guides
@@ -346,12 +334,8 @@ cabeçalho passava a mentir por todos eles.
 - Arquivos de invariante de banco em `tests/invariants/` — RLS/isolamento cross-tenant, RBAC,
   governança (G1–G6). Excluídos do `test:unit` de propósito; rodam via `pnpm test:db` **e no job
   `invariants` do CI**. Quantos: `git ls-files 'tests/invariants/*.test.ts' | wc -l`.
-- Specs Playwright em `tests/e2e/`, quase todas no CI (via `e2e.yml`, **obrigatório**). As que
-  ficam de fora estão declaradas em `FORA_DO_CI`, **com o motivo escrito ao lado**. Esta linha
-  já afirmou "menos uma" depois de deixarem de ser uma — por isso não conta mais. A issue #63,
-  que originou a discussão, está **fechada** e o título dela descreve um estado que já não vale.
-  Quantas existem: `ls tests/e2e/*.spec.ts | wc -l`. Quantas ficam fora:
-  `git show origin/main:.github/workflows/e2e.yml | grep -A4 'FORA_DO_CI:'`.
+- Specs Playwright em `tests/e2e/`, **fora do CI** neste fork: rodam local, com `pnpm test:e2e`.
+  Quantas existem: `ls tests/e2e/*.spec.ts | wc -l`.
 **Antes de declarar pronto**, siga a **Definition of Done de [`CLAUDE.md`](CLAUDE.md)** — não
 confie na memória, conte lá:
 

@@ -93,8 +93,8 @@ e quais, rode, confira, restaure. Molde de teste: qualquer `tests/unit/*.test.ts
 com o defeito que motivou, guarda de vacuidade, asserção no valor (não na presença).
 
 ### Spec e2e nova
-Entra em `SPECS_PARTE_N` do `.github/workflows/e2e.yml`, ou em `FORA_DO_CI` **com o motivo escrito**
-(`grep -ciE "waha|resend|nuvemshop|redis" <spec>` diz se ela depende de serviço que o CI não tem).
+Roda só local — este fork não tem e2e no CI. `grep -ciE "waha|resend|nuvemshop|redis" <spec>`
+diz se ela depende de serviço real que a sua máquina precisa ter de pé.
 
 ### Identidade dos commits
 `root@vps…`, `@localhost`, e-mail vazio: o GitHub não associa a conta nenhuma. Antes do push:

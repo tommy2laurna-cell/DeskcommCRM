@@ -167,38 +167,18 @@ caso U6 de [`testing/user-journey-map.md`](testing/user-journey-map.md), que foi
 mão em 2026-08-13. *(O `imagens-ok` estava listado aqui como pendente; entrou na branch
 protection em 2026-08-13 e saiu desta lista em 2026-08-14.)*
 
-### 4.1 Os E2E quase não rodam no CI 🟠 — parcialmente resolvido em 2026-07-30
+### 4.1 Os E2E não rodam no CI deste fork 🟠
 
-> **Atualização (2026-08-14 @ `741c4ec8`):** `e2e.yml` roda **45 das 46 specs**, e o `e2e` **é
-> check obrigatório** na branch protection desde 2026-08-08 (junto com `verify`,
-> `build-and-size`, `invariants` e `imagens-ok` — **cinco**). A única spec fora é
-> `vps-fresh-onboarding`. O parágrafo abaixo é o registro de 2026-08-05, mantido pelo histórico
-> que ele conta; os números dele estão superados por este bloco.
->
-> **Registro de 2026-08-05 (issue #63):** `e2e.yml` roda **28 das 32 specs** contra Supabase
-> local com o `baseline.sql` aplicado. Não-obrigatório ainda. A primeira execução real já
-> pagou o job: achou a página `/500`, que `public-paths.ts` declarava pública e **nunca havia
-> sido criada**. A rodada de 2026-08-05 pagou de novo: as 12 specs do épico IA 360 nunca
-> tinham entrado no gate, e ao rodá-las apareceu um defeito de produto real
-> (`capacidades-do-agente` — o teto de 20 capacidades desabilita a crítica que o desenho manda
-> marcar à mão). As 4 restantes seguem sem gate — o texto abaixo continua valendo para elas.
+O `e2e.yml` do autor saiu em 86d40e7: no fork LRN nenhuma spec Playwright roda no CI e `e2e` não
+existe como check. `vitest.config.ts` exclui `tests/e2e/**` do `test:unit`, então regressão de tela
+só aparece na corrida local — `pnpm test:e2e`, receita em
+`.agents/skills/deskcomm-contribuir/references/receita-e2e-local.md`. Quantas specs existem:
+`ls tests/e2e/*.spec.ts | wc -l`. A `vps-fresh-onboarding.spec.ts`, a jornada que a doutrina de QA
+Visual classifica como a mais crítica, exige WAHA + Redis + Resend + Nuvemshop de pé.
 
 O gate de isolamento RLS **roda** — `ci.yml` tem o job `invariants` chamando `pnpm test:db`,
-que sobe `pgvector/pgvector:pg17`, aplica `baseline.sql` em modo install e update, e roda os
-56 arquivos de `tests/invariants/`. Esse buraco está fechado.
-
-O que continua fora (2026-08-14): **1 das 46 specs Playwright**. A
-`vps-webhook-outbound-ssrf.spec.ts`, única prova automatizada do guard de SSRF, **passou a
-rodar** no `e2e.yml`. Mas a `vps-fresh-onboarding.spec.ts` — a jornada que a doutrina de QA
-Visual classifica como o caminho mais crítico do produto — continua fora, porque exige WAHA +
-Redis + Resend + Nuvemshop no runner. Regressão nela passa sem detecção (issue #63), e é por
-isso que **`e2e` verde não prova a instalação fresca**.
-
-O `e2e` **é** check obrigatório desde 2026-08-08; um PR que o quebre não entra na `main`.
-
-`vitest.config.ts:12` exclui `tests/invariants/**` e `tests/e2e/**` do `test:unit`. Para os
-invariantes isso é deliberado e correto (o job de CI os pega). Para os E2E, quem os pega é o
-`e2e.yml` — hoje 45 de 46, não "metade".
+que aplica `baseline.sql` em modo install e update e roda `tests/invariants/`. Esse buraco está
+fechado.
 
 ### 4.2 `pnpm gov:verify` não é o comando único que aparenta ser 🟠
 
