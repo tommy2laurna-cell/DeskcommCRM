@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { canonicalPhoneBR, phoneForDisplay, phoneLookupVariants, samePhone } from "@/lib/channels/phone-variants";
+import { arSemDdiParaE164, canonicalPhoneBR, phoneForDisplay, phoneLookupVariants, samePhone } from "@/lib/channels/phone-variants";
 
 /** Payloads REAIS capturados da WABA de teste em 2026-07-29. */
 const INBOUND = JSON.parse(
@@ -130,5 +130,43 @@ describe("samePhone", () => {
 
   it("fixo e celular com dígitos parecidos NÃO se confundem", () => {
     expect(samePhone("553132345678", "5531932345678")).toBe(false);
+  });
+});
+
+describe("Argentina (+54 9)", () => {
+  it("com 9 (wa_id) ganha a variante SEM o 9, e vice-versa", () => {
+    expect(phoneLookupVariants("5491112345678")).toEqual(["+5491112345678", "+541112345678"]);
+    expect(phoneLookupVariants("541112345678")).toEqual(["+541112345678", "+5491112345678"]);
+  });
+
+  it("as cinco grafias caem no MESMO contato", () => {
+    const grafias = ["+54 11 1234 5678", "5491112345678", "541112345678", "+54 9 11 1234-5678"];
+    for (const g of grafias) {
+      expect(canonicalPhoneBR(g)).toBe("+5491112345678");
+      expect(samePhone(g, "5491112345678")).toBe(true);
+    }
+    expect(arSemDdiParaE164("1112345678")).toBe("+5491112345678");
+    expect(arSemDdiParaE164("01115 12345678".replace(/\D/g, ""))).toBe("+5491112345678");
+  });
+
+  it("interior (área de 3 e 4 dígitos)", () => {
+    expect(phoneLookupVariants("5492214567890")).toEqual(["+5492214567890", "+542214567890"]);
+    expect(canonicalPhoneBR("542966123456")).toBe("+5492966123456");
+  });
+
+  it("guarda: área fora de 1-3 ou tamanho estranho não ganha variante", () => {
+    expect(phoneLookupVariants("549412345678")).toEqual(["+549412345678"]);
+    expect(phoneLookupVariants("5491112345")).toEqual(["+5491112345"]);
+    expect(phoneLookupVariants("54911123456789")).toEqual(["+54911123456789"]);
+  });
+
+  it("pessoas diferentes continuam diferentes", () => {
+    expect(samePhone("5491112345678", "5491112345679")).toBe(false);
+  });
+
+  it("Brasil não mudou", () => {
+    expect(phoneLookupVariants("553198966398")).toEqual(["+553198966398", "+5531998966398"]);
+    expect(canonicalPhoneBR("553198966398")).toBe("+5531998966398");
+    expect(phoneLookupVariants("553132345678")).toEqual(["+553132345678"]);
   });
 });

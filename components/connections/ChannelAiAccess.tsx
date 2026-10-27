@@ -82,7 +82,7 @@ function AccessForm({ channelId, initial, onClose }: { channelId: string; initia
       mode, test_phone_numbers: numbers.split("\n").map(n => n.trim()).filter(Boolean),
     });
     if (!parsed.success) {
-      setError(t("Use um telefone com DDI por linha, por exemplo +5511999998888."));
+      setError(t("Use um telefone com DDI por linha, por exemplo +5491112345678."));
       return;
     }
     setBusy(true);
@@ -116,7 +116,7 @@ function AccessForm({ channelId, initial, onClose }: { channelId: string; initia
         <Textarea id={id} rows={6} value={numbers} disabled={busy}
           onChange={e => { setNumbers(e.target.value); setError(null); }}
           aria-invalid={Boolean(error)} aria-describedby={`${id}-help`}
-          placeholder="+5511999998888" />
+          placeholder="+5491112345678" />
         <p id={`${id}-help`} className="text-sm text-muted-foreground">
           {t("Um telefone com DDI por linha. Lista vazia no modo de teste bloqueia todas as respostas automáticas.")}
         </p>

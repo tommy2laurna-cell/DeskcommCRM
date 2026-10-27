@@ -4,7 +4,7 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
+import { arSemDdiParaE164, canonicalPhoneBR } from "@/lib/channels/phone-variants";
 
 export interface FieldMap {
   name?: string[];
@@ -26,16 +26,24 @@ export interface MappedLead {
   source_metadata: Record<string, string>;
 }
 
-/** Normaliza telefone BR para E.164 com o nono dígito no celular. */
+/**
+ * Normaliza telefone para E.164 canônico (BR com o nono, AR com o 9).
+ * Sem DDI: área+número de 10 dígitos (ou formato local com `0`/`15`) é Argentina quando a
+ * área começa em 1-3; 10 dígitos de outra faixa mantêm a leitura antiga (+55). 11 dígitos = BR.
+ */
 export function normalizePhoneBR(raw: unknown): string | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   const digits = raw.replace(/\D/g, "");
   let e164: string | null = null;
   if (raw.trim().startsWith("+")) {
     e164 = /^\d{8,15}$/.test(digits) ? `+${digits}` : null;
+  } else if (digits.startsWith("0")) {
+    e164 = arSemDdiParaE164(digits);
   } else if (digits.length === 12 || digits.length === 13) {
-    e164 = digits.startsWith("55") ? `+${digits}` : null;
-  } else if (digits.length === 10 || digits.length === 11) {
+    e164 = /^5[45]/.test(digits) ? `+${digits}` : null;
+  } else if (digits.length === 10) {
+    e164 = arSemDdiParaE164(digits) ?? `+55${digits}`;
+  } else if (digits.length === 11) {
     e164 = `+55${digits}`;
   }
   return e164 ? canonicalPhoneBR(e164) : null;

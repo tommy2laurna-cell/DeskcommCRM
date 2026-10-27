@@ -237,7 +237,7 @@ export function ContactPickerDialog({
                 id="manual-contact-phone"
                 value={manualPhone}
                 onChange={(e) => setManualPhone(e.target.value)}
-                placeholder="+55 32 98479-3302"
+                placeholder="+54 9 11 1234-5678"
                 disabled={sending}
               />
             </div>

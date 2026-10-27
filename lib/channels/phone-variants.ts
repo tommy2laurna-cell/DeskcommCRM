@@ -26,6 +26,41 @@ function digitsOf(raw: string): string {
 }
 
 /**
+ * Argentina: o celular é +54 9 <área><número> (forma do `wa_id` e a que o CRM guarda);
+ * quem digita costuma omitir o 9 (+54 <área><número>). Área argentina começa em 1, 2 ou 3
+ * (11 = AMBA, 2xx/3xx = interior): é a guarda contra inventar um 9 em número que não é AR.
+ * Ponytail: não distinguimos fixo de celular sem o 9 — a Argentina não tem faixa de
+ * celular reconhecível pelos dígitos, e o 9 só é usado por quem tem WhatsApp.
+ */
+function variantesAR(d: string, original: string): string[] {
+  const resto = d.slice(2);
+  if (resto.length === 11 && resto[0] === "9" && /^[1-3]/.test(resto.slice(1))) {
+    return [original, `+54${resto.slice(1)}`];
+  }
+  if (resto.length === 10 && /^[1-3]/.test(resto)) return [original, `+549${resto}`];
+  return [original];
+}
+
+/**
+ * Número argentino digitado sem DDI → E.164 canônico (`+549…`), ou null se não for AR.
+ * Aceita área+número (10 dígitos) e o formato local com tronco `0` e/ou `15`
+ * (`011 15 1234-5678`). O `15` só é removido quando há UMA posição possível
+ * (área de 2, 3 ou 4 dígitos); ambíguo → null, não adivinhamos.
+ */
+export function arSemDdiParaE164(digits: string): string | null {
+  let n = digits;
+  if (n.startsWith("0")) {
+    n = n.slice(1);
+    if (n.length === 12) {
+      const pos = [2, 3, 4].filter((a) => n.slice(a, a + 2) === "15");
+      if (pos.length !== 1) return null;
+      n = n.slice(0, pos[0]) + n.slice(pos[0]! + 2);
+    }
+  }
+  return n.length === 10 && /^[1-3]/.test(n) ? `+549${n}` : null;
+}
+
+/**
  * Formas pelas quais este número pode estar gravado. A primeira é sempre a original;
  * a segunda (quando existe) é a contraparte com/sem o nono dígito.
  *
@@ -36,7 +71,8 @@ export function phoneLookupVariants(raw: string): string[] {
   if (d.length === 0) return [];
 
   const original = `+${d}`;
-  // Fora do Brasil o nono dígito não existe — variante única, sem inventar regra.
+  if (d.startsWith("54")) return variantesAR(d, original);
+  // Fora do Brasil e da Argentina o nono dígito não existe — variante única, sem inventar regra.
   if (!d.startsWith("55")) return [original];
 
   const ddd = d.slice(2, 4);

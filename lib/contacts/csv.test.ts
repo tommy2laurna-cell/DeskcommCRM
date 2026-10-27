@@ -91,9 +91,13 @@ describe("normalizaTelefone", () => {
     // planilha sem DDI é brasileira, e a regra é a mesma da ingestão de webhook.
     ["(11) 99999-8888", "+5511999998888"],
     ["11999998888", "+5511999998888"],
-    ["(11) 3333-4444", "+551133334444"],
+    // Sem DDI, 10 dígitos com área 1-3 passam a ser Argentina (LRN, Fase 3); BR fixo/antigo
+    // precisa do DDI. Área 4-9 sem DDI mantém a leitura antiga (+55).
+    ["(11) 3333-4444", "+5491133334444"],
+    ["551133334444", "+551133334444"],
+    ["(41) 3333-4444", "+554133334444"],
     ["5511999998888", "+5511999998888"],
-    ["3284793302", "+5532984793302"],
+    ["553284793302", "+5532984793302"],
     ["+553284793302", "+5532984793302"],
   ])("%s → %s", (raw, esperado) => {
     expect(normalizaTelefone(raw)).toBe(esperado);
