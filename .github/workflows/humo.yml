@@ -1,0 +1,217 @@
+name: humo
+
+# Prueba de humo del CRM Conectado: Supabase local (CLI) + imágenes publicadas
+# en GHCR (app, worker, scheduler; no se compila nada) + journeys de Playwright
+# + RAM medida con `docker stats` cada 30 s.
+#
+# Simulado: SOLO la IA, con INTERNAL_AGENT_RUN_STUB (el único doble que trae el
+# código). WhatsApp: WAHA real, sin teléfono emparejado -> los flujos que
+# necesitan una sesión de WhatsApp quedan NO MEDIDOS.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de imagen en GHCR (vacío = último tag v* del repo)"
+        required: false
+        default: ""
+      specs:
+        description: "Specs de tests/e2e a correr (vacío = lista por defecto)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 9 * * 1" # lunes 09:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  humo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_PORT: "3000"
+      HUMO_BASE_URL: "http://localhost:3000"
+      EXTENSIONS_LOCAL_CATALOG_ORIGIN: "http://127.0.0.1:56331"
+      SPECS_DEFAULT: >-
+        smoke.spec.ts auth.spec.ts error-pages.spec.ts
+        signup-journey.spec.ts password-recovery.spec.ts
+        rbac-roles.spec.ts inbox-scope.spec.ts
+        conversa-vira-lead.spec.ts contato-salva-email.spec.ts
+        kanban-owner-filter.spec.ts importar-leads-planilha.spec.ts
+        juntar-contatos-duplicados.spec.ts credenciais-de-ia.spec.ts
+        agente-novo-e-uso.spec.ts webhooks.spec.ts
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - name: Resolver el tag de las imágenes
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          T="$TAG_INPUT"
+          if [ -z "$T" ]; then T="$(git tag --list 'v*' --sort=-v:refname | head -1)"; fi
+          [ -n "$T" ] || { echo "::error::No hay tag v* en el repo"; exit 1; }
+          T="${T#v}"
+          echo "IMAGE_TAG=$T" >> "$GITHUB_ENV"
+          # El namespace sale de _common.sh (única fuente; namespace-das-imagens.test.ts).
+          NS="$(sed -n 's/^IMG_NS="\(.*\)"$/\1/p' hostgator-setup-kit/_common.sh | head -1)"
+          [ -n "$NS" ] || { echo "::error::No pude leer IMG_NS de _common.sh"; exit 1; }
+          echo "IMG_NS=$NS" >> "$GITHUB_ENV"
+          echo "Imágenes: $NS/*:$T"
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql (lo mismo que aplica el install.sh)
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          IDS=$(docker ps -q --filter name=supabase_realtime)
+          [ -n "$IDS" ] || { echo "::error::Sin contenedor supabase_realtime"; exit 1; }
+          docker restart $IDS >/dev/null
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' $IDS 2>/dev/null)" = "healthy" ] && break
+            sleep 2
+          done
+
+      - name: Generar .env.e2e (guardas - solo Supabase local)
+        run: pnpm e2e:env
+
+      - name: Preparar el entorno de los contenedores
+        run: |
+          # WAHA exige el hash SHA-512 de la clave. La clave es un placeholder de CI, no un secreto.
+          echo "WAHA_API_KEY_SHA512=$(printf '%s' 'e2e-placeholder-nao-e-segredo' | sha512sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "WAHA_WEBHOOK_BASE_URL=http://host.docker.internal:3000" >> .env.e2e
+
+      - name: Bajar las imágenes
+        run: docker compose -f .github/humo/compose.yml --profile waha pull
+
+      - name: Muestreo de RAM (cada 30 s)
+        run: |
+          nohup bash .github/humo/ram.sh "$RUNNER_TEMP/ram.csv" > /dev/null 2>&1 &
+          echo $! > "$RUNNER_TEMP/ram.pid"
+
+      - name: Levantar app, worker, scheduler, redis, srh y waha
+        run: |
+          docker compose -f .github/humo/compose.yml --profile waha up -d
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null "$HUMO_BASE_URL/login" && { echo "app arriba en ~$((i*3))s"; exit 0; }
+            sleep 3
+          done
+          echo "::error::La app no respondió en 180 s"
+          docker compose -f .github/humo/compose.yml --profile waha ps
+          docker compose -f .github/humo/compose.yml logs --tail=80 app
+          exit 1
+
+      - name: Dejar que el stack se asiente (RAM en reposo)
+        run: |
+          sleep 70
+          date +%s > "$RUNNER_TEMP/journeys-start"
+
+      - name: Instalar Playwright (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Semillas de las specs
+        run: |
+          cp .env.e2e .env.local
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+          pnpm exec tsx scripts/seed-e2e-escalacao.ts
+          pnpm exec tsx scripts/seed-e2e-followup-agent.ts
+          pnpm exec tsx scripts/seed-e2e-catalogo-openrouter.ts
+
+      - name: Journeys (Playwright contra los contenedores)
+        id: journeys
+        continue-on-error: true
+        env:
+          SPECS_INPUT: ${{ inputs.specs }}
+        run: |
+          LISTA="$SPECS_INPUT"
+          [ -n "$LISTA" ] || LISTA="$SPECS_DEFAULT"
+          pnpm exec playwright test -c .github/humo/playwright.humo.config.ts $LISTA
+
+      - name: Resumen (journeys, RAM, actualización)
+        if: always()
+        run: |
+          set +e
+          kill "$(cat "$RUNNER_TEMP/ram.pid")" 2>/dev/null
+          {
+            echo "## Humo del CRM Conectado - imágenes \`${IMAGE_TAG}\`"
+            echo ""
+            if [ -f humo-resultados.json ]; then
+              node -e '
+                const r = JSON.parse(require("fs").readFileSync("humo-resultados.json","utf8"));
+                const s = r.stats; const total = s.expected + s.unexpected + s.flaky + s.skipped;
+                console.log(`**Journeys: ${s.expected}/${total} verdes** (fallan ${s.unexpected}, flaky ${s.flaky}, salteados ${s.skipped}).`);
+              '
+            else
+              echo "**Journeys: NO MEDIDO** (Playwright no llegó a escribir resultados)."
+            fi
+            echo ""
+            node .github/humo/resumen-ram.mjs "$RUNNER_TEMP/ram.csv" "$(cat "$RUNNER_TEMP/journeys-start" 2>/dev/null)"
+            echo ""
+            echo "### Prueba de actualización"
+            REG="${IMG_NS%%/*}"; OWNER="${IMG_NS#*/}"
+            T=$(curl -s "https://${REG}/token?scope=repository:${OWNER}/deskcommcrm:pull" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+            VERS=$(curl -s -H "Authorization: Bearer $T" "https://${REG}/v2/${OWNER}/deskcommcrm/tags/list" \
+              | node -pe 'JSON.parse(require("fs").readFileSync(0)).tags.filter(t=>/^\d{4}\.\d+\.\d+$/.test(t)).sort().join(" ")')
+            echo "Versiones con tag calendario en GHCR: \`${VERS}\`"
+            if [ "$(echo $VERS | wc -w)" -lt 2 ]; then
+              echo ""
+              echo "**NO MEDIDO:** hay una sola versión publicada; no existe imagen anterior desde la cual actualizar."
+            fi
+            echo ""
+            echo "### NO MEDIDO"
+            echo "- WhatsApp real: WAHA corre sin teléfono emparejado; mensajes entrantes/salientes, QR y envíos no se probaron."
+            echo "- IA real: simulada con \`INTERNAL_AGENT_RUN_STUB\`; no se midió calidad ni costo de tokens."
+            echo "- Specs que necesitan Resend/Nuvemshop o sesión de WhatsApp, y el resto de \`tests/e2e\` fuera de la lista."
+            echo "- Que el scheduler llame a los crons de la app: el contenedor corre (RAM medida) pero no hay log que lo pruebe."
+            echo "- Latencia y carga: un solo usuario secuencial."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Logs de los contenedores
+        if: always()
+        run: |
+          mkdir -p artefactos/logs
+          for c in $(docker ps -a --format '{{.Names}}'); do docker logs "$c" > "artefactos/logs/$c.log" 2>&1; done
+          cp "$RUNNER_TEMP/ram.csv" artefactos/ram.csv 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: humo
+          path: |
+            artefactos/
+            playwright-report/
+            test-results/
+            humo-resultados.json
+          retention-days: 14
+
+      - name: Bajar todo
+        if: always()
+        run: |
+          docker compose -f .github/humo/compose.yml --profile waha down -v || true
+          supabase stop --no-backup || true
+
+      - name: Fallar si los journeys fallaron
+        if: steps.journeys.outcome == 'failure'
+        run: exit 1
