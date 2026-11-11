@@ -1,6 +1,7 @@
 // Lee el CSV de ram.sh y arma la tabla: contenedor, RAM en reposo (primera
 // muestra tras el arranque), RAM pico (máximo de la corrida).
-// Uso: node resumen-ram.mjs <ram.csv>
+// Uso: node resumen-ram.mjs <ram.csv> [marca-epoch-inicio-journeys]
+// Con la marca, "reposo" = última muestra anterior a los journeys (stack asentado).
 import { readFileSync } from "node:fs";
 
 const unidad = { B: 1, KiB: 1024, MiB: 1024 ** 2, GiB: 1024 ** 3, kB: 1e3, MB: 1e6, GB: 1e9 };
@@ -19,9 +20,12 @@ const porNombre = new Map();
 for (const f of filas) (porNombre.get(f.nombre) ?? porNombre.set(f.nombre, []).get(f.nombre)).push(f);
 
 const esSupabase = (n) => /^supabase_/.test(n);
+const marca = process.argv[3] ? Number(process.argv[3]) : null;
 const fila = (n, xs) => {
   xs.sort((a, b) => a.ts - b.ts);
-  return { n, reposo: xs[0].mib, pico: Math.max(...xs.map((x) => x.mib)), muestras: xs.length };
+  const previas = marca ? xs.filter((x) => x.ts <= marca) : [];
+  const reposo = (previas.length ? previas[previas.length - 1] : xs[0]).mib;
+  return { n, reposo, pico: Math.max(...xs.map((x) => x.mib)), muestras: xs.length };
 };
 const todos = [...porNombre].map(([n, xs]) => fila(n, xs));
 const nuestros = todos.filter((r) => !esSupabase(r.n)).sort((a, b) => b.pico - a.pico);

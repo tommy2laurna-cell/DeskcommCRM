@@ -120,7 +120,9 @@ jobs:
           exit 1
 
       - name: Dejar que el stack se asiente (RAM en reposo)
-        run: sleep 70
+        run: |
+          sleep 70
+          date +%s > "$RUNNER_TEMP/journeys-start"
 
       - name: Instalar Playwright (chromium)
         run: pnpm exec playwright install --with-deps chromium
@@ -159,7 +161,7 @@ jobs:
               echo "**Journeys: NO MEDIDO** (Playwright no llegó a escribir resultados)."
             fi
             echo ""
-            node .github/humo/resumen-ram.mjs "$RUNNER_TEMP/ram.csv"
+            node .github/humo/resumen-ram.mjs "$RUNNER_TEMP/ram.csv" "$(cat "$RUNNER_TEMP/journeys-start" 2>/dev/null)"
             echo ""
             echo "### Prueba de actualización"
             T=$(curl -s "https://ghcr.io/token?scope=repository:tommy2laurna-cell/deskcommcrm:pull" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
@@ -175,6 +177,7 @@ jobs:
             echo "- WhatsApp real: WAHA corre sin teléfono emparejado; mensajes entrantes/salientes, QR y envíos no se probaron."
             echo "- IA real: simulada con \`INTERNAL_AGENT_RUN_STUB\`; no se midió calidad ni costo de tokens."
             echo "- Specs que necesitan Resend/Nuvemshop o sesión de WhatsApp, y el resto de \`tests/e2e\` fuera de la lista."
+            echo "- Que el scheduler llame a los crons de la app: el contenedor corre (RAM medida) pero no hay log que lo pruebe."
             echo "- Latencia y carga: un solo usuario secuencial."
           } >> "$GITHUB_STEP_SUMMARY"
 
