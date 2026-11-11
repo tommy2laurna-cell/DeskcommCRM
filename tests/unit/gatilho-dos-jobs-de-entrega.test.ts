@@ -159,6 +159,15 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "workflow chamava desde 2026-08-27, e `test:db` sozinho mede um banco VAZIO — constraint " +
       "que só quebra com linha existente passava verde.",
   },
+
+  // --- fora da cadeia de entrega ---------------------------------------------
+  "humo.yml::humo": {
+    condicao: null,
+    efeito:
+      "É o humo semanal: sobe as imagens PUBLICADAS no GHCR (sem compilar) contra o Supabase " +
+      "local, roda os journeys de `tests/e2e` e mede a RAM por contêiner. Sem ele, ninguém " +
+      "confere que a imagem que a VPS puxa de fato sobe e atende, nem quanto ela pesa.",
+  },
 };
 
 interface JobLido {

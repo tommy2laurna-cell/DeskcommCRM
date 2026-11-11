@@ -11,7 +11,7 @@ x-log: &log
 
 services:
   app:
-    image: ghcr.io/tommy2laurna-cell/deskcommcrm:${IMAGE_TAG}
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcommcrm:${IMAGE_TAG}
     pull_policy: always
     network_mode: host
     env_file: ../../.env.e2e
@@ -23,7 +23,7 @@ services:
     logging: *log
 
   worker:
-    image: ghcr.io/tommy2laurna-cell/deskcomm-worker:${IMAGE_TAG}
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcomm-worker:${IMAGE_TAG}
     pull_policy: always
     network_mode: host
     env_file: ../../.env.e2e
@@ -33,7 +33,7 @@ services:
     logging: *log
 
   scheduler:
-    image: ghcr.io/tommy2laurna-cell/deskcomm-scheduler:${IMAGE_TAG}
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcomm-scheduler:${IMAGE_TAG}
     pull_policy: always
     network_mode: host
     extra_hosts: ["app:127.0.0.1"]      # el entrypoint llama a http://app:3000

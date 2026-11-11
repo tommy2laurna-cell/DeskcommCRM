@@ -60,7 +60,11 @@ jobs:
           [ -n "$T" ] || { echo "::error::No hay tag v* en el repo"; exit 1; }
           T="${T#v}"
           echo "IMAGE_TAG=$T" >> "$GITHUB_ENV"
-          echo "Imágenes: $T"
+          # El namespace sale de _common.sh (única fuente; namespace-das-imagens.test.ts).
+          NS="$(sed -n 's/^IMG_NS="\(.*\)"$/\1/p' hostgator-setup-kit/_common.sh | head -1)"
+          [ -n "$NS" ] || { echo "::error::No pude leer IMG_NS de _common.sh"; exit 1; }
+          echo "IMG_NS=$NS" >> "$GITHUB_ENV"
+          echo "Imágenes: $NS/*:$T"
 
       - uses: supabase/setup-cli@v3
         with:
@@ -168,8 +172,9 @@ jobs:
             node .github/humo/resumen-ram.mjs "$RUNNER_TEMP/ram.csv" "$(cat "$RUNNER_TEMP/journeys-start" 2>/dev/null)"
             echo ""
             echo "### Prueba de actualización"
-            T=$(curl -s "https://ghcr.io/token?scope=repository:tommy2laurna-cell/deskcommcrm:pull" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
-            VERS=$(curl -s -H "Authorization: Bearer $T" https://ghcr.io/v2/tommy2laurna-cell/deskcommcrm/tags/list \
+            REG="${IMG_NS%%/*}"; OWNER="${IMG_NS#*/}"
+            T=$(curl -s "https://${REG}/token?scope=repository:${OWNER}/deskcommcrm:pull" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+            VERS=$(curl -s -H "Authorization: Bearer $T" "https://${REG}/v2/${OWNER}/deskcommcrm/tags/list" \
               | node -pe 'JSON.parse(require("fs").readFileSync(0)).tags.filter(t=>/^\d{4}\.\d+\.\d+$/.test(t)).sort().join(" ")')
             echo "Versiones con tag calendario en GHCR: \`${VERS}\`"
             if [ "$(echo $VERS | wc -w)" -lt 2 ]; then
