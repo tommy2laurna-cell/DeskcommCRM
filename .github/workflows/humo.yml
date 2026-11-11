@@ -9,8 +9,6 @@ name: humo
 # necesitan una sesión de WhatsApp quedan NO MEDIDOS.
 
 on:
-  push:
-    branches: [ci/humo] # TEMPORAL: se quita antes de mergear
   workflow_dispatch:
     inputs:
       tag:
