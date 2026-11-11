@@ -51,9 +51,11 @@ jobs:
         timeout-minutes: 5
 
       - name: Resolver el tag de las imágenes
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          T="${{ inputs.tag }}"
+          T="$TAG_INPUT"
           if [ -z "$T" ]; then T="$(git tag --list 'v*' --sort=-v:refname | head -1)"; fi
           [ -n "$T" ] || { echo "::error::No hay tag v* en el repo"; exit 1; }
           T="${T#v}"
@@ -138,8 +140,10 @@ jobs:
       - name: Journeys (Playwright contra los contenedores)
         id: journeys
         continue-on-error: true
+        env:
+          SPECS_INPUT: ${{ inputs.specs }}
         run: |
-          LISTA="${{ inputs.specs }}"
+          LISTA="$SPECS_INPUT"
           [ -n "$LISTA" ] || LISTA="$SPECS_DEFAULT"
           pnpm exec playwright test -c .github/humo/playwright.humo.config.ts $LISTA
 
