@@ -1,0 +1,93 @@
+name: entrada-prospectos
+
+# Prueba de integración de POST /api/v1/prospectos contra el código de ESTA rama:
+# Supabase local + baseline.sql + build del app + Playwright (tests/e2e/entrada-prospectos.spec.ts).
+#
+# POR QUÉ NO ESTÁ EN humo.yml: `humo` levanta las imágenes PUBLICADAS en GHCR
+# (un tag v*), no el código de la rama; un endpoint nuevo no existe en ninguna
+# imagen hasta el próximo release, así que ahí la prueba daría 404. Una vez que
+# haya una imagen con el endpoint, agregar `entrada-prospectos.spec.ts` y su
+# seed (`scripts/seed-e2e-entrada-prospectos.ts`) a SPECS_DEFAULT de humo.yml.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/entrada-prospectos.yml"
+      - "app/api/v1/prospectos/**"
+      - "app/api/v1/leads/_handler.ts"
+      - "lib/leads/entrada-de-prospectos.ts"
+      - "lib/schemas/prospectos.ts"
+      - "lib/webhooks/inbound.ts"
+      - "lib/channels/phone-variants.ts"
+      - "tests/e2e/entrada-prospectos.spec.ts"
+      - "scripts/seed-e2e-entrada-prospectos.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prospectos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      E2E_PORT: "3001"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          IDS=$(docker ps -q --filter name=supabase_realtime)
+          [ -n "$IDS" ] && docker restart $IDS >/dev/null || true
+          sleep 10
+
+      - name: .env.e2e y build contra el Supabase local
+        run: |
+          pnpm e2e:env
+          cp .env.e2e .env.local
+          pnpm e2e:build
+
+      - name: Semillas
+        run: |
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+          pnpm exec tsx scripts/seed-e2e-entrada-prospectos.ts
+
+      - name: Instalar Playwright (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Entrada de prospectos
+        run: pnpm exec playwright test tests/e2e/entrada-prospectos.spec.ts
+
+      - name: Subir resultados
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: entrada-prospectos
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14

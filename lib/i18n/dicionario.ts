@@ -5694,6 +5694,8 @@ export const DICIONARIO: Traducoes = {
   "Erro ao carregar timeline.": { es: "Error al cargar la línea de tiempo." },
   "Nenhuma atividade registrada ainda.": { es: "Ninguna actividad registrada todavía." },
   "Todas as origens": { es: "Todos los orígenes" },
+  "Formulário da web": { es: "Formulario web" },
+  "Automação (API)": { es: "Automatización (API)" },
   "Importado (CSV)": { es: "Importado (CSV)" },
   "Anúncio da Meta": { es: "Anuncio de Meta" },
   "Anúncio do Google": { es: "Anuncio de Google" },

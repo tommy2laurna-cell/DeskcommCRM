@@ -59,6 +59,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // carona a `/api/v1/messages/[id]`, que NÃO tem suporte a Bearer.
   /^\/api\/v1\/messages$/,
   /^\/api\/v1\/conversations\/open-with-contact$/,
+  // Entrada de prospectos desde n8n: sesión OU Bearer `dsk_…` con `mcp:write`,
+  // resuelto por `resolveAuthDual` dentro de la ruta. Ancorada con `$`.
+  /^\/api\/v1\/prospectos$/,
   // Upload outbound: primeiro passo do envio de MÍDIA por token. Sem ele, o
   // cartão de fidelidade (a única das automações que não é texto) não teria
   // como sair depois do corte de gateway.

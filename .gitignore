@@ -88,6 +88,7 @@ supabase/.branches/
 inbox-with-real-msgs.png
 .e2e-creds.json
 .e2e-agente-mcp.json
+.e2e-entrada-prospectos.json
 test-results/
 playwright-report/
 .vercel
