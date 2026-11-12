@@ -112,12 +112,12 @@ describe("painel de etiquetas com idioma espanhol", () => {
 
   it("cada recusa do servidor sai em espanhol — inclusive o código que o mapa não conhece", async () => {
     const esperado: Record<string, string> = {
-      validation_failed: "Revisa la etiqueta y el nombre nuevo.",
+      validation_failed: "Revisá la etiqueta y el nombre nuevo.",
       forbidden: "Solo un gerente o administrador de la organización puede cambiar las etiquetas.",
-      unauthenticated: "Tu sesión expiró. Entra de nuevo.",
-      mfa_required: "Confirma el segundo factor para cambiar las etiquetas.",
+      unauthenticated: "Tu sesión expiró. Entrá de nuevo.",
+      mfa_required: "Confirmá el segundo factor para cambiar las etiquetas.",
       forbidden_tenant: "No estás en ninguna organización activa.",
-      codigo_que_o_mapa_nao_tem: "No se pudo completar ahora. Inténtalo de nuevo.",
+      codigo_que_o_mapa_nao_tem: "No se pudo completar ahora. Intentalo de nuevo.",
     };
     montar();
 
@@ -143,7 +143,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        "No se pudo contactar al servidor. Recarga la página y comprueba antes de intentarlo de nuevo.",
+        "No se pudo contactar al servidor. Recargá la página y comprobá antes de intentarlo de nuevo.",
       ),
     );
   });

@@ -113,7 +113,7 @@ describe("NavHub", () => {
     );
 
     expect(
-      screen.getByText("Todo lo que define quién atiende por ti — y cómo seguir lo que hace."),
+      screen.getByText("Todo lo que define quién atiende por vos — y cómo seguir lo que hace."),
     ).toBeTruthy();
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent?.trim())).toEqual([
       "Configurar el agente",

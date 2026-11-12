@@ -51,7 +51,7 @@ describe("ProfileForm em espanhol", () => {
   });
 
   it("a voz do espanhol é tuteio neutro — voseo reprova", () => {
-    expect(traduzir("Escreva uma mensagem…", "es")).toBe("Escribe un mensaje…");
-    expect(traduzir("Escolha um modelo aprovado…", "es")).toBe("Elige una plantilla aprobada…");
+    expect(traduzir("Escreva uma mensagem…", "es")).toBe("Escribí un mensaje…");
+    expect(traduzir("Escolha um modelo aprovado…", "es")).toBe("Elegí una plantilla aprobada…");
   });
 });
