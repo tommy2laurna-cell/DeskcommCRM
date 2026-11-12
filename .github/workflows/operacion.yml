@@ -113,7 +113,7 @@ jobs:
 
       - name: Restaurar
         run: |
-          export RESTORE_DB_URL="$DST" SUPABASE_DB_URL="$SRC" MEDIA_RESTORE_VOLUME=waha-media-restaurada
+          export RESTORE_DB_URL="$DST" SUPABASE_DB_URL="$SRC" MEDIA_RESTORE_VOLUME=waha-media-restaurada RESTORE_APPLY_BASELINE=0
           bash operacion/restaurar.sh latest | tee "$RUNNER_TEMP/restaurar.out"
 
       - name: Comparar conteos
@@ -126,6 +126,18 @@ jobs:
           diff "$RUNNER_TEMP/media-origen.txt" "$RUNNER_TEMP/media-destino.txt"
           echo "media: IGUAL ($(head -1 "$RUNNER_TEMP/media-origen.txt") archivos)"
 
+      - name: Re-aplicar baseline.sql sobre la restaurada (lo hace restaurar.sh en producción)
+        run: |
+          # Pone lo que no viaja en el dump (policies de storage, publicación realtime). Informativo: el
+          # baseline resiembra filas por defecto (presupuestos de IA de orgs que no tenían, precios), así
+          # que los conteos pueden subir un poco. Tiene que correr sin error y se mide cuánto tarda.
+          T0=$(date +%s)
+          psql "$DST" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql > /dev/null
+          echo "baseline_s=$(( $(date +%s) - T0 ))" | tee "$RUNNER_TEMP/baseline.out"
+          psql "$DST" -tAq -f "$RUNNER_TEMP/conteos.sql" > "$RUNNER_TEMP/destino2.txt"
+          echo "--- diferencias que agrega el baseline (informativo) ---"
+          diff "$RUNNER_TEMP/destino.txt" "$RUNNER_TEMP/destino2.txt" || true
+
       - name: Resumen
         if: always()
         run: |
@@ -133,6 +145,7 @@ jobs:
             echo "## Operación: backup y restauración"
             echo '```'
             cat "$RUNNER_TEMP/backup.out" "$RUNNER_TEMP/restaurar.out" 2>/dev/null | grep -E '^(backup_ok|restauracion_ok)' || true
+            cat "$RUNNER_TEMP/baseline.out" 2>/dev/null
             echo '```'
             echo "Filas: $(awk '{s+=$2} END{print s}' "$RUNNER_TEMP/origen.txt" 2>/dev/null) (origen) vs $(awk '{s+=$2} END{print s}' "$RUNNER_TEMP/destino.txt" 2>/dev/null) (destino)."
           } >> "$GITHUB_STEP_SUMMARY"
