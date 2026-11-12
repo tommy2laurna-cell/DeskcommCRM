@@ -41,7 +41,7 @@ const PANTALLAS: Pantalla[] = [
   { id: "04-bandeja", ruta: () => `/app/inbox?id=${datos().conversa_id}` },
   { id: "05-ficha-contacto", ruta: () => `/app/contacts/${datos().contato_id}` },
   { id: "06-agenda", ruta: "/app/agenda" },
-  { id: "07-configuracion-marca", ruta: "/admin/marca" },
+  { id: "07-configuracion-marca", ruta: "/app/settings/marca" },
   { id: "08-onboarding", ruta: "/onboarding/welcome" },
 ];
 

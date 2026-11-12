@@ -298,8 +298,17 @@ export default function RootLayout({
           </MarcaDosClientComponents>
           <Toaster
             position="top-right"
-            richColors
             closeButton
+            toastOptions={{
+              classNames: {
+                toast: "!bg-surface-elevated !text-text !border-border",
+                description: "!text-text-muted",
+                error: "!text-error-fg !border-error/40",
+                success: "!text-success-fg !border-success/40",
+                warning: "!text-warning-fg !border-warning/40",
+                info: "!text-info-fg !border-info/40",
+              },
+            }}
             duration={4000}
           />
         </Providers>
