@@ -40,7 +40,7 @@ export function WelcomeForm({ defaultOrgName }: { defaultOrgName: string }) {
   const t = useT();
   const [displayName, setDisplayName] = useState(defaultOrgName);
   const [oQueFaz, setOQueFaz] = useState("");
-  const [timezone, setTimezone] = useState("America/Sao_Paulo");
+  const [timezone, setTimezone] = useState("America/Argentina/Buenos_Aires");
   const [accepted, setAccepted] = useState(false);
   const [pending, startTransition] = useTransition();
 

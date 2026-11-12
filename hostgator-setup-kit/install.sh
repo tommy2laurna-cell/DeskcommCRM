@@ -1083,7 +1083,7 @@ fi
 # colar. Sem o token, nada muda: seguem as perguntas de sempre.
 if [ -z "${NEXT_PUBLIC_SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
   step "Criando o projeto Supabase automaticamente"
-  _sb_out="$(bash "$KIT_DIR/supabase-provision.sh" "${APP_NAME:-DeskcommCRM}" "${SUPABASE_REGION:-sa-east-1}")" \
+  _sb_out="$(bash "$KIT_DIR/supabase-provision.sh" "${APP_NAME:-CRM}" "${SUPABASE_REGION:-sa-east-1}")" \
     || die "Não consegui criar o projeto Supabase. Crie no painel e rode de novo sem SUPABASE_ACCESS_TOKEN."
   # O script imprime `CHAVE='valor'` em stdout (o visual dele vai para stderr).
   # A leitura é por parse, não por `eval` — o porquê está em
@@ -1258,11 +1258,11 @@ FIELDS=(
   ${CAMPO_OPENAI_EXTRA:+"$CAMPO_OPENAI_EXTRA"}
   "OWNER_EMAIL|E-mail do primeiro admin (dono)||v_email||"
   "OWNER_PASSWORD|Senha do primeiro admin (mínimo 8 caracteres)||v_password|secret|"
-  "APP_NAME|Nome que aparece na interface (Enter para o padrão)|DeskcommCRM|||"
+  "APP_NAME|Nome que aparece na interface (Enter para o padrão)|CRM|||"
   # Idioma da instalação. Fica JUNTO do nome do produto de propósito: as duas
   # perguntas são "como o sistema se apresenta", e separá-las faria a segunda
   # parecer configuração técnica.
-  "APP_LOCALE|Idioma do sistema — 1) Português  2) Español (Enter = Português)|1|v_locale||"
+  "APP_LOCALE|Idioma do sistema — 1) Português  2) Español (Enter = Español)|2|v_locale||"
   # Sem default, e `opcional`: em `--yes` o `ask_one` devolve 0 sem associar a
   # variável (campo sem default e sem `opcional` morre em `die`), e o `envq` lá
   # embaixo usa `${APP_ACCENT_HEX:-}`. Enter = a cor do produto, que é o
@@ -1598,8 +1598,8 @@ esac
   # porque é o que se digita lendo um menu numerado, mas quem lê o `.env` — o
   # bootstrap, o SQL abaixo, um operador conferindo — precisa do código.
   case "${APP_LOCALE:-}" in
-    2|es) APP_LOCALE="es";;
-    *)    APP_LOCALE="pt-BR";;
+    1|pt|pt-BR) APP_LOCALE="pt-BR";;
+    *)    APP_LOCALE="es";;
   esac
   envq APP_NAME "$APP_NAME"
   envq APP_LOCALE "$APP_LOCALE"
@@ -1990,7 +1990,7 @@ curl -fsS -X POST "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"${OWNER_EMAIL}\",\"password\":\"${OWNER_PASSWORD}\",\"email_confirm\":true,\"user_metadata\":{\"locale\":\"${APP_LOCALE:-pt-BR}\"}}" \
+  -d "{\"email\":\"${OWNER_EMAIL}\",\"password\":\"${OWNER_PASSWORD}\",\"email_confirm\":true,\"user_metadata\":{\"locale\":\"${APP_LOCALE:-es}\"}}" \
   >/dev/null 2>&1 || true
 
 # 2) Resolve o id direto do auth.users e cria org + membership + platform_admin.
@@ -2015,7 +2015,7 @@ begin
     -- própria cai neste valor, então gravar só no dono entregaria o sistema em
     -- português para todo mundo que ele convidasse numa instalação em espanhol.
     insert into public.organizations (slug, display_name, legal_name, locale, created_by)
-    values ('minha-empresa','Minha Empresa','Minha Empresa','${APP_LOCALE:-pt-BR}', v_uid)
+    values ('minha-empresa','Minha Empresa','Minha Empresa','${APP_LOCALE:-es}', v_uid)
     returning id into v_org;
   else
     -- Re-execução do instalador com outra resposta: quem rodou de novo para
@@ -2023,7 +2023,7 @@ begin
     -- estiver no padrão — se alguém já escolheu pela tela, a escolha dela vale
     -- mais que uma resposta repetida no terminal.
     update public.organizations
-       set locale = '${APP_LOCALE:-pt-BR}'
+       set locale = '${APP_LOCALE:-es}'
      where id = v_org and coalesce(locale, 'pt-BR') = 'pt-BR';
   end if;
   -- O provedor que a pessoa ESCOLHEU passa a valer no banco. O trigger

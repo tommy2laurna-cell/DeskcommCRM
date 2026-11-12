@@ -62,7 +62,7 @@ export const FUSOS_OFERECIDOS: { codigo: string; rotulo: string }[] = [
  * linha em `channel_knobs`). Coincidem hoje; unificar os dois faria uma
  * decisão de anti-ban mudar o relógio do agente.
  */
-export const FUSO_PADRAO = "America/Sao_Paulo";
+export const FUSO_PADRAO = "America/Argentina/Buenos_Aires";
 
 /**
  * O runtime consegue usar este fuso?

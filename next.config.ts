@@ -119,13 +119,18 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+// SENTRY_DSN=off apaga a telemetria também no build: sem plugin, sem upload de
+// source maps e sem a rota de túnel /monitoring. A organização e o projeto do
+// Sentry vêm do ambiente de quem instala; nada do autor fica no código.
+const sentryApagado = process.env.SENTRY_DSN === "off";
+
+export default sentryApagado ? nextConfig : withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: "automatik-labs",
+  org: process.env.SENTRY_ORG,
 
-  project: "javascript-nextjs",
+  project: process.env.SENTRY_PROJECT,
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

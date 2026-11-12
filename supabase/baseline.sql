@@ -27194,6 +27194,14 @@ alter table public.organizations
 alter table public.crm_leads
   alter column currency set default 'ARS';
 
+-- ---- idioma e fuso padrão: español e Buenos Aires (migration 0276) ----
+-- Só o DEFAULT; linha existente fica como está.
+alter table public.organizations
+  alter column locale set default 'es';
+
+alter table public.organizations
+  alter column timezone set default 'America/Argentina/Buenos_Aires';
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna
