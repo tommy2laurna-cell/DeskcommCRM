@@ -8,6 +8,11 @@ cargar_env
 exigir BACKUP_PASSPHRASE BACKUP_REMOTE
 URL="$(url_base)"; [ -n "$URL" ] || die "falta SUPABASE_DB_URL en $ENV_FILE"
 
+# Un backup que falla en silencio es la peor falla: se descubre al restaurar. Avisa por mail.
+avisar_falla() {
+  enviar_mail "[${CLIENTE_NOMBRE:-${APP_NAME:-cliente}}] Backup FALLÓ" "El backup diario de ${CLIENTE_NOMBRE:-${APP_NAME:-cliente}} falló (línea $1). Revisar /var/log/deskcomm-backup.log en el VPS. Hora: $(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+}
+trap 'avisar_falla $LINENO' ERR
 T0=$(date +%s); STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export BACKUP_PASSPHRASE
