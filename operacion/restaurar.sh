@@ -19,6 +19,8 @@ fi
 T0=$(date +%s)
 log "restaurando el backup $SEL en la base nueva"
 
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+PG_DOCKER_ARGS="${PG_DOCKER_ARGS:-} -v $TMP:/w:ro"   # los dumps descifrados se leen desde /w
 elegir_imagen "$DEST"
 # 1) La base destino tiene que estar vacía: restaurar encima de datos mezcla dos historias.
 q() { pg_tool psql "$DEST" -v ON_ERROR_STOP=1 -tAq -c "$1"; }
@@ -28,13 +30,15 @@ N="$(q "select count(*) from information_schema.tables where table_schema in ('p
 
 # 2) Extensiones (las mismas que crea el install.sh) y datos
 q "create schema if not exists extensions; create extension if not exists \"uuid-ossp\" with schema extensions; create extension if not exists pgcrypto with schema extensions; create extension if not exists vector with schema public; create extension if not exists citext with schema public; create extension if not exists pg_trgm with schema public;" >/dev/null
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 bajar() { rclone copyto "${BACKUP_REMOTE%/}/$1" "$TMP/$1" --checksum; }
 bajar "auth-$SEL.dump.enc"; bajar "db-$SEL.dump.enc"
 T1=$(date +%s)
 # auth primero: las tablas de public tienen FK a auth.users
 descifrar < "$TMP/auth-$SEL.dump.enc" | pg_tool pg_restore --dbname="$DEST" --data-only --no-owner --exit-on-error
-descifrar < "$TMP/db-$SEL.dump.enc"   | pg_tool pg_restore --dbname="$DEST" --no-owner --no-privileges --exit-on-error
+# El dump trae `CREATE SCHEMA public`, que en una base nueva ya existe: se lo saca de la lista.
+descifrar < "$TMP/db-$SEL.dump.enc" > "$TMP/db.dump"
+pg_tool pg_restore -l /w/db.dump | grep -vE ' SCHEMA - public | SCHEMA public ' > "$TMP/lista.toc"
+pg_tool pg_restore --dbname="$DEST" -L /w/lista.toc --no-owner --no-privileges --exit-on-error /w/db.dump
 T2=$(date +%s)
 
 # 3) Lo que no viaja en el dump (policies de storage, publicación realtime): el baseline es idempotente
