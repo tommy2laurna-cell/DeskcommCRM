@@ -10,6 +10,9 @@ export type ResolvedTheme = "light" | "dark";
 // lista congelada, num segundo arquivo).
 export const STORAGE_KEY = "deskcomm-theme";
 
+/** D2 (LIQUID-UI): sin preferencia guardada, la app es oscura. */
+export const DEFAULT_THEME: Theme = "dark";
+
 type ThemeContextValue = {
   /** User preference: light, dark, or system. */
   theme: Theme;
@@ -22,14 +25,15 @@ type ThemeContextValue = {
 const ThemeContext = React.createContext<ThemeContextValue | null>(null);
 
 function readStoredTheme(): Theme {
-  if (typeof window === "undefined") return "system";
+  if (typeof window === "undefined") return DEFAULT_THEME;
   try {
     const v = window.localStorage.getItem(STORAGE_KEY);
     if (v === "light" || v === "dark" || v === "system") return v;
   } catch {
     // localStorage indisponível (modo privado, sandbox) — segue com default.
   }
-  return "system";
+  // D2: oscuro por defecto. «system» solo si la persona lo eligió.
+  return DEFAULT_THEME;
 }
 
 function getSystemTheme(): ResolvedTheme {
@@ -78,7 +82,7 @@ function getTemaSnapshot(): Theme {
   return temaEmCache;
 }
 function getTemaSnapshotDoServidor(): Theme {
-  return "system";
+  return DEFAULT_THEME;
 }
 function inscreverEmTema(ouvinte: Ouvinte): () => void {
   ouvintesDeTema.add(ouvinte);

@@ -375,7 +375,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         //
         // `shrink-0` porque item de flex encolhe por padrão, e uma barra de 60
         // espremida para caber é o mesmo defeito por outro caminho.
-        "sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-200",
+        "sticky top-0 z-30 flex h-screen shrink-0 flex-col lq-barra border-r transition-[width] duration-200",
         collapsed ? "w-16" : "w-60",
       )}
     >

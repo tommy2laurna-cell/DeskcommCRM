@@ -81,7 +81,7 @@ export function StageColumn({
     : undefined;
 
   return (
-    <div className="flex w-80 shrink-0 flex-col rounded-lg border border-border bg-surface-muted/40">
+    <div className="flex w-80 shrink-0 flex-col lq-v2 lq-columna">
       <div className="group/etapa flex items-center gap-2 border-b border-border px-3 py-2.5">
         {/* "Selecionar a etapa inteira" é o gesto que faz a ação em lote valer a
             pena: sem ele, mover trinta cards deixa de ser trinta arrastes e vira
