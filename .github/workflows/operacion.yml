@@ -1,0 +1,135 @@
+name: operacion
+
+# Prueba de la operación del VPS: retención, aviso de salud y, sobre todo, que un
+# backup se PUEDA restaurar: datos -> backup cifrado -> afuera (rclone) -> base nueva
+# -> restaurar -> comparar conteos. Mide cuánto tarda cada paso.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/operacion] # TEMPORAL: quitar al mergear
+    paths: ["operacion/**", ".github/workflows/operacion.yml", "app/api/v1/health/**"]
+  schedule:
+    - cron: "0 10 * * 1" # lunes 10:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  restauracion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SRC: "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+      DST: "postgresql://postgres:postgres@127.0.0.1:54322/restaurada"
+      ENV_FILE: /dev/null
+      PG_DOCKER_ARGS: "--network host"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tests sin infraestructura (retención y salud)
+        run: |
+          bash operacion/test-retencion.sh
+          bash operacion/test-salud.sh
+
+      - name: Instalar rclone
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Supabase local + baseline.sql (igual que humo)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+          psql "$SRC" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$SRC" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+
+      - name: Cargar datos de prueba (base + media)
+        run: |
+          psql "$SRC" -v ON_ERROR_STOP=1 -q <<'SQL'
+          insert into public.organizations (slug, legal_name, display_name)
+            values ('org-a','Org A','Org A'), ('org-b','Org B','Org B');
+          insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+            select gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+                   'u'||g||'@ci.test', 'x', now(), now(), now(), '{}', '{}' from generate_series(1,3) g;
+          insert into public.contacts (organization_id)
+            select o.id from public.organizations o, generate_series(1,5000) where o.slug in ('org-a','org-b');
+          SQL
+          docker volume create waha-media >/dev/null
+          docker run --rm -v waha-media:/data alpine:3.20 sh -c 'for i in $(seq 1 100); do head -c 200000 /dev/urandom > /data/m$i.bin; done'
+
+      - name: Contar el origen
+        run: |
+          cat > "$RUNNER_TEMP/conteos.sql" <<'SQL'
+          select format('%s.%s', n.nspname, c.relname) || ' ' ||
+                 (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', n.nspname, c.relname), false, true, '')))[1]::text
+          from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          where c.relkind = 'r' and (n.nspname in ('public','private') or (n.nspname = 'auth' and c.relname in ('users','identities')))
+          order by 1;
+          SQL
+          psql "$SRC" -tAq -f "$RUNNER_TEMP/conteos.sql" > "$RUNNER_TEMP/origen.txt"
+          psql "$SRC" -tAq -c "select 'huella_contacts ' || md5(string_agg(id::text, ',' order by id)) from public.contacts" >> "$RUNNER_TEMP/origen.txt"
+          docker run --rm -v waha-media:/data:ro alpine:3.20 sh -c 'cd /data && find . -type f | wc -l && find . -type f -exec sha256sum {} + | sort -k2 | sha256sum' > "$RUNNER_TEMP/media-origen.txt"
+          wc -l "$RUNNER_TEMP/origen.txt"
+          grep -E "contacts|organizations|auth.users" "$RUNNER_TEMP/origen.txt"
+
+      - name: Backup (cifrado + rclone)
+        run: |
+          BACKUP_PASSPHRASE="$(openssl rand -hex 24)"
+          echo "::add-mask::$BACKUP_PASSPHRASE"
+          echo "BACKUP_PASSPHRASE=$BACKUP_PASSPHRASE" >> "$GITHUB_ENV"
+          export BACKUP_PASSPHRASE SUPABASE_DB_URL="$SRC" BACKUP_REMOTE=":local:$RUNNER_TEMP/offsite" MEDIA_VOLUME=waha-media
+          echo "BACKUP_REMOTE=$BACKUP_REMOTE" >> "$GITHUB_ENV"
+          bash operacion/backup.sh | tee "$RUNNER_TEMP/backup.out"
+          ls -l "$RUNNER_TEMP/offsite"
+          # el archivo cifrado no debe contener texto legible de la base
+          ! grep -aq "ci.test" "$RUNNER_TEMP"/offsite/auth-*.enc || { echo "::error::el backup de auth NO está cifrado"; exit 1; }
+          ! grep -aq "organizations" "$RUNNER_TEMP"/offsite/db-*.enc || { echo "::error::el backup NO está cifrado"; exit 1; }
+
+      - name: Base nueva (vacía) con auth/storage/realtime como un Supabase recién creado
+        run: |
+          psql "$SRC" -q -c "create database restaurada"
+          docker run --rm --network host postgres:17-alpine pg_dump "$SRC" -s --no-owner --no-privileges -n auth -n storage -n realtime -n extensions \
+            | psql "$DST" -q > /dev/null 2> "$RUNNER_TEMP/prep.err" || true
+          psql "$DST" -q -c "create publication supabase_realtime" 2>/dev/null || true
+          echo "errores de la preparación (informativo): $(grep -c ERROR "$RUNNER_TEMP/prep.err" || true)"
+          echo "tablas en public/private del destino:"
+          psql "$DST" -tAq -c "select count(*) from information_schema.tables where table_schema in ('public','private')"
+          echo "auth.users del destino:"
+          psql "$DST" -tAq -c "select count(*) from auth.users"
+
+      - name: Restaurar
+        run: |
+          export RESTORE_DB_URL="$DST" SUPABASE_DB_URL="$SRC" MEDIA_RESTORE_VOLUME=waha-media-restaurada
+          bash operacion/restaurar.sh latest | tee "$RUNNER_TEMP/restaurar.out"
+
+      - name: Comparar conteos
+        run: |
+          psql "$DST" -tAq -f "$RUNNER_TEMP/conteos.sql" > "$RUNNER_TEMP/destino.txt"
+          psql "$DST" -tAq -c "select 'huella_contacts ' || md5(string_agg(id::text, ',' order by id)) from public.contacts" >> "$RUNNER_TEMP/destino.txt"
+          docker run --rm -v waha-media-restaurada:/data:ro alpine:3.20 sh -c 'cd /data && find . -type f | wc -l && find . -type f -exec sha256sum {} + | sort -k2 | sha256sum' > "$RUNNER_TEMP/media-destino.txt"
+          diff "$RUNNER_TEMP/origen.txt" "$RUNNER_TEMP/destino.txt"
+          echo "conteos de tablas: IGUALES ($(wc -l < "$RUNNER_TEMP/origen.txt") líneas)"
+          diff "$RUNNER_TEMP/media-origen.txt" "$RUNNER_TEMP/media-destino.txt"
+          echo "media: IGUAL ($(head -1 "$RUNNER_TEMP/media-origen.txt") archivos)"
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "## Operación: backup y restauración"
+            echo '```'
+            cat "$RUNNER_TEMP/backup.out" "$RUNNER_TEMP/restaurar.out" 2>/dev/null | grep -E '^(backup_ok|restauracion_ok)' || true
+            echo '```'
+            echo "Filas: $(awk '{s+=$2} END{print s}' "$RUNNER_TEMP/origen.txt" 2>/dev/null) (origen) vs $(awk '{s+=$2} END{print s}' "$RUNNER_TEMP/destino.txt" 2>/dev/null) (destino)."
+          } >> "$GITHUB_STEP_SUMMARY"
