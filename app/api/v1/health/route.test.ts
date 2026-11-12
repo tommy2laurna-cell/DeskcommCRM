@@ -91,3 +91,24 @@ describe("GET /api/v1/health — o endereço interno não sai para quem não tem
     expect(corpo).toContain(HOST_VAZADO);
   });
 });
+
+describe("GET /api/v1/health — Supabase pausado (plan free)", () => {
+  beforeEach(() => vi.resetModules());
+
+  it("el 540 de Supabase sale como proyecto_pausado, no como un «caído» genérico", async () => {
+    // 540 = "project paused": https://supabase.com/docs/guides/troubleshooting/http-status-codes
+    const real = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: unknown) =>
+      String(url).includes("supabase.co") ? new Response("", { status: 540 }) : Promise.reject(new Error("fetch failed")),
+    ) as typeof fetch;
+    try {
+      const { GET } = await import("./route");
+      const res = await GET(pedido());
+      const { data } = await res.json();
+      expect(res.status).toBe(503);
+      expect(data.checks.supabase.reason).toBe("proyecto_pausado");
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+});
