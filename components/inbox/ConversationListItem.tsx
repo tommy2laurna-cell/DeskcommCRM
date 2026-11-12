@@ -255,7 +255,7 @@ export function ConversationListItem({
             {displayName}
           </span>
           <span
-            className="shrink-0 text-[11px] tabular-nums text-text-subtle"
+            className={cn("shrink-0 text-[11px] tabular-nums text-text-subtle", isSelected && "text-text-muted")}
             // O mesmo lugar da tela mostra duas coisas diferentes conforme a aba:
             // na Fila é "desde quando o cliente escreveu", nas outras é "há quanto
             // tempo a conversa mexeu". O rótulo existe só onde a leitura muda.
