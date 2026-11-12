@@ -38,6 +38,18 @@ pg_tool() {
   docker run --rm -i ${PG_DOCKER_ARGS:-} "${PG_IMAGE:-postgres:17-alpine}" "$@"
 }
 
+# Las herramientas tienen que ser del MISMO major que el servidor: un pg_dump 17 contra
+# un servidor 15 escribe `SET transaction_timeout` y el pg_restore se cae. Detecta el major
+# del servidor de URL y fija PG_IMAGE (si no se pudo, queda postgres:17-alpine).
+elegir_imagen() { # elegir_imagen URL
+  [ -z "${PG_IMAGE:-}" ] || return 0
+  local n
+  # shellcheck disable=SC2086
+  n="$(docker run --rm -i ${PG_DOCKER_ARGS:-} postgres:17-alpine psql "$1" -tAq -c 'show server_version_num' 2>/dev/null | tr -d '[:space:]')" || n=''
+  case "$n" in [0-9][0-9][0-9][0-9][0-9][0-9]) PG_IMAGE="postgres:$((n / 10000))-alpine"; export PG_IMAGE ;; esac
+  log "herramientas de Postgres: ${PG_IMAGE:-postgres:17-alpine}"
+}
+
 cifrar()   { openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE; }
 descifrar(){ openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASSPHRASE; }
 

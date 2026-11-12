@@ -19,6 +19,7 @@ fi
 T0=$(date +%s)
 log "restaurando el backup $SEL en la base nueva"
 
+elegir_imagen "$DEST"
 # 1) La base destino tiene que estar vacía: restaurar encima de datos mezcla dos historias.
 q() { pg_tool psql "$DEST" -v ON_ERROR_STOP=1 -tAq -c "$1"; }
 N="$(q "select count(*) from information_schema.tables where table_schema in ('public','private')")"

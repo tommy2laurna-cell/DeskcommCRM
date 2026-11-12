@@ -11,6 +11,7 @@ URL="$(url_base)"; [ -n "$URL" ] || die "falta SUPABASE_DB_URL en $ENV_FILE"
 T0=$(date +%s); STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export BACKUP_PASSPHRASE
+elegir_imagen "$URL"
 
 # 1) Base. Dos dumps porque pg_dump no mezcla esquema+datos de public/private con
 #    solo-datos de auth: sin auth.users las FK a usuarios no cierran al restaurar.

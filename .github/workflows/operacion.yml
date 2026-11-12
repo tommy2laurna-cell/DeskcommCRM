@@ -19,6 +19,9 @@ jobs:
   restauracion:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash   # con -e -o pipefail: sin esto un fallo antes de `| tee` pasa en verde
     env:
       SRC: "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
       DST: "postgresql://postgres:postgres@127.0.0.1:54322/restaurada"
