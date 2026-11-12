@@ -66,7 +66,8 @@ async function main(): Promise<void> {
     .eq("is_archived", false)
     .order("position");
   if (eErr || !etapas?.length) throw new Error(`sin etapas: ${eErr?.message}`);
-  const etapaIds = (etapas as { id: string }[]).map((e) => e.id);
+  // Solo las primeras etapas: las últimas son ganado/perdido y exigen motivo.
+  const etapaIds = (etapas as { id: string }[]).map((e) => e.id).slice(0, 3);
 
   const canal = await insertar("channel_sessions", {
     organization_id: org,
