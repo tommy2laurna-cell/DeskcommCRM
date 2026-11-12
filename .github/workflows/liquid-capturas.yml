@@ -13,6 +13,7 @@ on:
     paths:
       - ".github/workflows/liquid-capturas.yml"
       - "tests/e2e/liquid-capturas.spec.ts"
+      - "scripts/seed-liquid-capturas.ts"
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,7 @@ jobs:
           ref: ${{ matrix.ref || github.sha }}
       - name: Traer el spec de capturas de la rama (el ANTES corre el spec nuevo contra el código viejo)
         run: |
-          git checkout "${{ github.sha }}" -- tests/e2e/liquid-capturas.spec.ts
+          git checkout "${{ github.sha }}" -- tests/e2e/liquid-capturas.spec.ts scripts/seed-liquid-capturas.ts
       - uses: ./.github/actions/preparar-node
         timeout-minutes: 5
 
@@ -83,6 +84,7 @@ jobs:
         run: |
           pnpm exec tsx scripts/seed-e2e-credentials.ts
           pnpm exec tsx scripts/seed-e2e-kanban.ts
+          pnpm exec tsx scripts/seed-liquid-capturas.ts
 
       - name: Instalar Playwright (chromium)
         run: pnpm exec playwright install --with-deps chromium

@@ -31,27 +31,15 @@ type Pantalla = {
   id: string;
   /** Sin sesión (login). El resto usa la sesión del admin. */
   publica?: boolean;
-  ruta: string | ((page: Page) => Promise<string | null>);
+  ruta: string | (() => string);
 };
 
 const PANTALLAS: Pantalla[] = [
   { id: "01-login", publica: true, ruta: "/login" },
   { id: "02-shell-navegacion", ruta: "/app" },
-  { id: "03-kanban", ruta: "/app/kanban" },
-  { id: "04-bandeja", ruta: "/app/inbox" },
-  {
-    id: "05-ficha-contacto",
-    ruta: async (page) => {
-      await page.goto("/app/contacts");
-      const enlace = page.locator('a[href^="/app/contacts/"]').first();
-      try {
-        await enlace.waitFor({ state: "visible", timeout: 15_000 });
-      } catch {
-        return null;
-      }
-      return await enlace.getAttribute("href");
-    },
-  },
+  { id: "03-kanban", ruta: () => `/app/pipelines/${datos().pipeline_id}` },
+  { id: "04-bandeja", ruta: () => `/app/inbox?id=${datos().conversa_id}` },
+  { id: "05-ficha-contacto", ruta: () => `/app/contacts/${datos().contato_id}` },
   { id: "06-agenda", ruta: "/app/agenda" },
   { id: "07-configuracion-marca", ruta: "/admin/marca" },
   { id: "08-onboarding", ruta: "/onboarding/welcome" },
@@ -69,6 +57,16 @@ let storageState: Awaited<ReturnType<import("@playwright/test").BrowserContext["
 const violaciones: Violacion[] = [];
 const incompletos: Record<string, number> = {};
 const omitidas: string[] = [];
+const urlsFinales: Record<string, string> = {};
+
+/** Ids que deja scripts/seed-liquid-capturas.ts en .e2e-creds.json. */
+function datos(): { pipeline_id: string; conversa_id: string; contato_id: string } {
+  const c = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".e2e-creds.json"), "utf8")) as {
+    liquid?: { pipeline_id: string; conversa_id: string; contato_id: string };
+  };
+  if (!c.liquid) throw new Error("falta `liquid` en .e2e-creds.json: corré scripts/seed-liquid-capturas.ts");
+  return c.liquid;
+}
 
 async function contexto(browser: Browser, ancho: (typeof ANCHOS)[number], tema: string, conSesion: boolean) {
   const ctx = await browser.newContext({
@@ -112,13 +110,7 @@ for (const ancho of ANCHOS) {
           const page = await ctx.newPage();
           const clave = `${p.id}__${ancho.id}__${tema}`;
           try {
-            let ruta: string | null;
-            if (typeof p.ruta === "string") ruta = p.ruta;
-            else ruta = await p.ruta(page);
-            if (ruta === null) {
-              omitidas.push(`${clave}: sin datos`);
-              continue;
-            }
+            const ruta = typeof p.ruta === "string" ? p.ruta : p.ruta();
             await page.goto(ruta, { waitUntil: "load" });
             await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
             await page.waitForTimeout(600);
@@ -144,6 +136,7 @@ for (const ancho of ANCHOS) {
                 violaciones.push({ pantalla: p.id, ancho: ancho.id, tema, url: page.url(), nodos });
               }
             }
+            urlsFinales[clave] = new URL(page.url()).pathname + new URL(page.url()).search;
             if (tema_aplicado !== tema) omitidas.push(`${clave}: data-theme=${tema_aplicado} (se pidió ${tema})`);
           } finally {
             await page.close();
@@ -168,6 +161,7 @@ test("resumen y contraste", async () => {
         violacionesDeContraste: total,
         pantallasConViolacion: violaciones.length,
         omitidas,
+        urlsFinales,
       },
       null,
       2,
