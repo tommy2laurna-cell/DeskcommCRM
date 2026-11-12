@@ -99,7 +99,7 @@ async function main(): Promise<void> {
       direction: "inbound",
       type: "text",
       status: "received",
-      sent_via: "manual",
+      sent_via: "external_device",
       body: MENSAJES[i],
       sent_at: new Date(Date.now() - i * 37 * 60_000).toISOString(),
     });
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
         direction: "outbound",
         type: "text",
         status: "sent",
-        sent_via: "manual",
+        sent_via: "crm",
         body: "¡Hola Lucía! Sí, tenemos el jueves a las 11 o el viernes a las 16. ¿Cuál te queda mejor?",
         sent_at: new Date(Date.now() - 20 * 60_000).toISOString(),
       });
