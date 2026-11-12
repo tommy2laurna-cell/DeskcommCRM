@@ -162,6 +162,12 @@ export function ContactDetailClient({ contactId }: Props) {
                 <dt className="text-xs uppercase text-muted-foreground">{t("Origem")}</dt>
                 <dd className="mt-1">{contact.source}</dd>
               </div>
+              {typeof contact.source_metadata?.campana === "string" && contact.source_metadata.campana && (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">{t("Campanha")}</dt>
+                  <dd className="mt-1">{contact.source_metadata.campana}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">{t("Última atividade")}</dt>
                 <dd className="mt-1">

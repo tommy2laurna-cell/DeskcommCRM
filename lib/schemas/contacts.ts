@@ -83,6 +83,7 @@ export const contactListQuerySchema = z.object({
   search: z.string().optional(),
   tag: z.string().optional(),
   source: z.string().optional(),
+  campaign: z.string().optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   order_by: z.enum(CONTACT_ORDER_BY).default("last_activity_at"),
