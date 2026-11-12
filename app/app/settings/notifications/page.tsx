@@ -58,7 +58,7 @@ export default async function NotificationsPage() {
       {pushPronto ? (
         <Card
           data-testid="push-status-pronto"
-          className="border-amber-500/40 bg-amber-50/40 p-4 text-sm dark:bg-amber-900/10"
+          className="border-warning/40 bg-warning-bg p-4 text-sm"
         >
           {t(
             "Email ainda não está disponível. In-app (toast) e Push (Chrome) já funcionam para as cinco categorias, inclusive com a aba fechada.",
@@ -67,7 +67,7 @@ export default async function NotificationsPage() {
       ) : (
         <Card
           data-testid="push-status-faltando-chaves"
-          className="border-amber-500/40 bg-amber-50/40 p-4 text-sm dark:bg-amber-900/10"
+          className="border-warning/40 bg-warning-bg p-4 text-sm"
         >
           <p className="font-medium">
             {t("Nesta instalação, os avisos só aparecem com o site aberto.")}

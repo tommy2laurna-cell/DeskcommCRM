@@ -112,27 +112,27 @@ function renderizarComoPrimeiraPassadaDoCliente(): string {
 }
 
 describe("o tema não diverge entre o SSR e a primeira renderização do cliente", () => {
-  it("com tema salvo 'dark', a primeira passada do cliente bate com o servidor", () => {
-    window.localStorage.setItem(CHAVE, "dark");
+  it("com tema salvo 'light', a primeira passada do cliente bate com o servidor", () => {
+    window.localStorage.setItem(CHAVE, "light");
 
     const doServidor = renderizarComoServidor();
     const doCliente = renderizarComoPrimeiraPassadaDoCliente();
 
-    // Os dois precisam dizer "system" — é o valor que `readStoredTheme()`
+    // Os dois precisam dizer "dark" (o default, D2) — é o valor que `readStoredTheme()`
     // devolve sem `window`, e é o que a hidratação tem de bater ANTES do
     // efeito que sincroniza com o localStorage rodar.
-    expect(doServidor).toContain("Tema: system");
+    expect(doServidor).toContain("Tema: dark");
     expect(
       doCliente,
       "A primeira renderização do cliente leu o localStorage direto no " +
-        "inicializador do useState, produzindo 'Tema: dark' — diferente do " +
-        "que o servidor mandou ('Tema: system'). É o hydration mismatch.",
-    ).toContain("Tema: system");
+        "inicializador do useState, produzindo 'Tema: light' — diferente do " +
+        "que o servidor mandou ('Tema: dark'). É o hydration mismatch.",
+    ).toContain("Tema: dark");
     expect(doCliente).toBe(doServidor);
   });
 
-  it("com tema salvo 'light', a primeira passada do cliente também bate", () => {
-    window.localStorage.setItem(CHAVE, "light");
+  it("com tema salvo 'system', a primeira passada do cliente também bate", () => {
+    window.localStorage.setItem(CHAVE, "system");
 
     const doServidor = renderizarComoServidor();
     const doCliente = renderizarComoPrimeiraPassadaDoCliente();
@@ -142,15 +142,15 @@ describe("o tema não diverge entre o SSR e a primeira renderização do cliente
 
   it("GUARDA DE VACUIDADE: depois do efeito, o tema real aparece", () => {
     // Sem este caso, os dois de cima passariam num componente que nunca
-    // reflete o tema salvo — "sempre system" bateria com "sempre system"
+    // reflete o tema salvo — "sempre dark" bateria com "sempre dark"
     // para sempre, e o defeito oposto (a preferência do usuário nunca é
     // lida) passaria despercebido.
-    window.localStorage.setItem(CHAVE, "dark");
+    window.localStorage.setItem(CHAVE, "light");
     const container = document.createElement("div");
     document.body.appendChild(container);
     act(() => {
       createRoot(container).render(ARVORE);
     });
-    expect(container.innerHTML).toContain("Tema: dark");
+    expect(container.innerHTML).toContain("Tema: light");
   });
 });

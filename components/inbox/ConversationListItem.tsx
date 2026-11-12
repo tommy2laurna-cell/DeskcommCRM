@@ -71,9 +71,9 @@ interface Props {
  * podem ser mantidas em arquivos diferentes.
  */
 const COR_DO_COMANDO: Record<string, string> = {
-  humano: "bg-blue-500",
+  humano: "bg-info",
   automatico: "bg-purple-500",
-  aguardando: "bg-amber-500",
+  aguardando: "bg-warning",
   ninguem: "bg-muted-foreground/60",
   encerrada: "bg-muted-foreground/30",
 };

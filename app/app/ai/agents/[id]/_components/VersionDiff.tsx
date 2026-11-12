@@ -138,7 +138,7 @@ export function VersionDiff({ versionA, versionB }: Props) {
                   <tr key={f.key} className="border-t border-border/40">
                     <td className="whitespace-nowrap py-1 pr-3 font-mono">{t(f.label)}</td>
                     <td className="whitespace-nowrap py-1 pr-3 font-mono text-destructive">{String(f.a)}</td>
-                    <td className="whitespace-nowrap py-1 font-mono text-emerald-600">{String(f.b)}</td>
+                    <td className="whitespace-nowrap py-1 font-mono text-success-fg">{String(f.b)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -171,7 +171,7 @@ export function VersionDiff({ versionA, versionB }: Props) {
               {String(versionA.followup?.enabled ?? false)}
             </span>{" "}
             →{" "}
-            <span className="font-mono text-emerald-600">
+            <span className="font-mono text-success-fg">
               {String(versionB.followup?.enabled ?? false)}
             </span>
           </p>
@@ -190,7 +190,7 @@ export function VersionDiff({ versionA, versionB }: Props) {
           {lines.map((l, idx) => {
             const cls =
               l.kind === "add"
-                ? "block bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                ? "block bg-success-bg text-success-fg dark:text-success"
                 : l.kind === "del"
                   ? "block bg-destructive/10 text-destructive"
                   : "block";
@@ -238,7 +238,7 @@ function Pills({
           variant="outline"
           className={
             tone === "add"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+              ? "border-success/40 bg-success-bg text-success-fg dark:text-success"
               : "border-destructive/40 bg-destructive/10 text-destructive"
           }
         >
