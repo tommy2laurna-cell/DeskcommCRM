@@ -9,7 +9,8 @@ import { type NextRequest } from "next/server";
 import { audit } from "@/lib/audit";
 import { fail, noContent, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { CAMPAIGN_COLS, mensajeAprobado, sesionDeMeta } from "@/lib/campaigns/cargar";
+import { CAMPAIGN_COLS, mensajeAprobado } from "@/lib/campaigns/cargar";
+import { sesionOficialDeMeta } from "@/lib/channels/sesion-oficial";
 import { clienteDeUsuario } from "@/lib/campaigns/http";
 import { updateCampaignSchema } from "@/lib/campaigns/schemas";
 import { categoriaDelMensaje } from "@/lib/campaigns/vista-previa";
@@ -78,7 +79,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams): Promise<
 
   const cambios: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.channel_session_id) {
-    if (!(await sesionDeMeta(db, org.orgId, parsed.data.channel_session_id))) {
+    if (!(await sesionOficialDeMeta(db, org.orgId, parsed.data.channel_session_id))) {
       return fail("not_meta_session", t("As campanhas só saem pela API oficial da Meta."), 422, {
         requestId,
       });

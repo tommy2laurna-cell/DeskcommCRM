@@ -4,7 +4,7 @@
  * Toma las campañas `confirmada`/`enviando` cuya hora ya llegó y procesa un lote
  * de cada una (`procesarLote`): opt-out revaluado antes de CADA envío, espera
  * anti-ban entre envíos, tope diario de la sesión, reintento idempotente. Sale
- * SOLO por la API de Meta: una sesión que no sea `meta_cloud` se salta.
+ * SOLO por la API de Meta: una sesión que no sea de la API oficial se cancela.
  *
  * Presupuesto de tiempo: el crontab da 60 s; no se arranca otra campaña pasados
  * ~30 s del tick. Rodada que no hizo nada NO audita (ver CLAUDE.md § Audit log).
@@ -16,6 +16,7 @@ import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { sesionOficialDeMeta } from "@/lib/channels/sesion-oficial";
 import { depsDeProduccion } from "@/lib/campaigns/deps";
 import { procesarLote, type CampanaEnCurso } from "@/lib/campaigns/procesar";
 import { env } from "@/lib/env";
@@ -64,17 +65,11 @@ async function handle(req: NextRequest): Promise<Response> {
   })[]) {
     if (Date.now() - inicio > PRESUPUESTO_MS) break;
 
-    const { data: sesion } = c.channel_session_id
-      ? await admin
-          .from("channel_sessions")
-          .select("provider, meta_phone_number_id")
-          .eq("id", c.channel_session_id)
-          .eq("organization_id", c.organization_id)
-          .maybeSingle()
-      : { data: null };
-    const s = sesion as { provider: string; meta_phone_number_id: string | null } | null;
-    if (!c.channel_session_id || !s || s.provider !== "meta_cloud" || !s.meta_phone_number_id) {
-      // Jamás por WAHA. Dejarla `confirmada` ocuparía uno de los cupos del tick para
+    const sesion = c.channel_session_id
+      ? await sesionOficialDeMeta(admin, c.organization_id, c.channel_session_id)
+      : null;
+    if (!c.channel_session_id || !sesion) {
+      // Solo la API oficial. Dejarla `confirmada` ocuparía uno de los cupos del tick para
       // siempre: se cancela con el motivo a la vista.
       await admin
         .from("campaigns")
@@ -89,7 +84,7 @@ async function handle(req: NextRequest): Promise<Response> {
     try {
       const r = await procesarLote(
         admin,
-        { ...c, channel_session_id: c.channel_session_id, session_ref: s.meta_phone_number_id },
+        { ...c, channel_session_id: c.channel_session_id, session_ref: sesion.meta_phone_number_id },
         deps,
       );
       total.campanas += 1;

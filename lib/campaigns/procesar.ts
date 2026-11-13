@@ -18,7 +18,7 @@
  *
  * Los efectos (espera, límite diario, transporte) entran por `deps`: la ruta
  * pasa los de producción y los tests pasan dobles. La campaña solo sale por la
- * API de Meta — jamás por WAHA (la ruta rechaza la sesión que no sea `meta_cloud`).
+ * API oficial de Meta (la ruta rechaza cualquier otra sesión).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 

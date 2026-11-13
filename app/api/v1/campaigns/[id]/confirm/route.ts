@@ -3,7 +3,7 @@
  * campaña lista para el cron (manager+).
  *
  * Reglas que bloquean la confirmación:
- *   - la sesión tiene que ser de Meta (jamás WAHA);
+ *   - la sesión tiene que ser de Meta (solo la API oficial);
  *   - el mensaje tiene que seguir aprobado;
  *   - marketing sin botón de baja => 422 «Los mensajes de marketing necesitan un botón de baja».
  *
@@ -19,8 +19,9 @@ import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { tieneBotonDeBaja } from "@/lib/campaigns/boton-de-baja";
-import { mensajeAprobado, sesionDeMeta } from "@/lib/campaigns/cargar";
+import { mensajeAprobado } from "@/lib/campaigns/cargar";
 import { clasificarContacto } from "@/lib/campaigns/destinatarios";
+import { sesionOficialDeMeta } from "@/lib/channels/sesion-oficial";
 import { clienteDeUsuario } from "@/lib/campaigns/http";
 import { categoriaDelMensaje, ListaDemasiadoGrande, recorrerLista } from "@/lib/campaigns/vista-previa";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -64,7 +65,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     return fail("not_draft", t("Só dá para editar uma campanha em rascunho."), 409, { requestId });
   }
   if (!camp.list_id) return fail("list_missing", t("A lista desta campanha foi apagada."), 422, { requestId });
-  if (!camp.channel_session_id || !(await sesionDeMeta(db, org.orgId, camp.channel_session_id))) {
+  if (!camp.channel_session_id || !(await sesionOficialDeMeta(db, org.orgId, camp.channel_session_id))) {
     return fail("not_meta_session", t("As campanhas só saem pela API oficial da Meta."), 422, { requestId });
   }
 

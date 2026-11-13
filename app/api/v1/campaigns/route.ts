@@ -1,7 +1,7 @@
 /**
  * GET  /api/v1/campaigns — campañas de la organización (agent+).
  * POST /api/v1/campaigns — crea un BORRADOR (manager+). Valida que la sesión sea
- *      de Meta (jamás WAHA) y que el mensaje esté aprobado; la categoría sale del
+ *      de Meta (solo la API oficial) y que el mensaje esté aprobado; la categoría sale del
  *      espejo, no del cliente.
  */
 import { randomUUID } from "node:crypto";
@@ -10,7 +10,8 @@ import { type NextRequest } from "next/server";
 import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { CAMPAIGN_COLS, mensajeAprobado, sesionDeMeta } from "@/lib/campaigns/cargar";
+import { CAMPAIGN_COLS, mensajeAprobado } from "@/lib/campaigns/cargar";
+import { sesionOficialDeMeta } from "@/lib/channels/sesion-oficial";
 import { clienteDeUsuario, crearIdempotente } from "@/lib/campaigns/http";
 import { createCampaignSchema } from "@/lib/campaigns/schemas";
 import { categoriaDelMensaje } from "@/lib/campaigns/vista-previa";
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const c = parsed.data;
   const db = await clienteDeUsuario();
 
-  if (!(await sesionDeMeta(db, org.orgId, c.channel_session_id))) {
+  if (!(await sesionOficialDeMeta(db, org.orgId, c.channel_session_id))) {
     return fail("not_meta_session", t("As campanhas só saem pela API oficial da Meta."), 422, {
       requestId,
     });
