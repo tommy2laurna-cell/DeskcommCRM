@@ -105,7 +105,6 @@ function Encabezado({ d, s }: { d: DatosDelDocumento; s: ReturnType<typeof estil
   return (
     <View style={s.banda}>
       {d.logoDataUri ? (
-        // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/Image no tiene `alt`.
         <Image src={d.logoDataUri} style={s.logo} />
       ) : (
         <Text style={s.marcaNombre}>{d.marca.nome}</Text>
