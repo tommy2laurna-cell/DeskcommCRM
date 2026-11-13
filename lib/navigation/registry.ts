@@ -77,6 +77,7 @@ const ICONS = {
   Megaphone,
   Palette,
   Plugs,
+  QrCode,
   PlugsConnected,
   PuzzlePiece,
   Receipt,
