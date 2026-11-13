@@ -8,7 +8,7 @@ import { type NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { ROLE_RANK } from "@/lib/auth/types";
+import { roleAtLeast } from "@/lib/auth/types";
 import { cargarTablero } from "@/lib/reports/tablero.server";
 import { ventanaDelPeriodo } from "@/lib/reports/tablero";
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (pedido && !/^[0-9a-f-]{36}$/i.test(pedido)) {
     return fail("validation_failed", "owner_user_id inválido.", 422, { requestId });
   }
-  const verTodo = ROLE_RANK[authz.org.role] >= ROLE_RANK.manager;
+  const verTodo = roleAtLeast(authz.org.role, "manager");
   const owner = verTodo ? pedido : authz.user.id;
 
   const r = await cargarTablero(authz.org.orgId, w.from, w.to, owner);
