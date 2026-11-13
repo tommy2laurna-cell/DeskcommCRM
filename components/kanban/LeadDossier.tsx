@@ -11,6 +11,7 @@ import { ConversaNoDossie } from "./ConversaNoDossie";
 import { LeadFieldsForm } from "./LeadFieldsForm";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
+import { PresupuestosDelNegocio } from "./PresupuestosDelNegocio";
 import { OwnerBadge } from "./OwnerBadge";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
 import type { CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
@@ -131,6 +132,8 @@ export function LeadDossier({
         )}
 
         <ConversaNoDossie conversa={lead.conversa} />
+
+        <PresupuestosDelNegocio leadId={lead.id} pipelineId={pipelineId} />
 
         {/* ② timeline */}
         <section className="flex-1 py-3">

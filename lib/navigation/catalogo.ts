@@ -585,6 +585,17 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // Las reglas del puntaje de prioridad: `manager`, porque cambian el orden del
+    // tablero para todo el equipo.
+    href: "/app/settings/puntaje",
+    label: "Puntaje de prioridad",
+    description: "Las reglas que ordenan a quién llamar primero en el tablero.",
+    icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // A porta que faltava para o vocabulário de etiquetas (issue #852). Até
     // aqui a etiqueta só ENTRAva no vocabulário — cada agente escrevia a que
     // quisesse em `add_tag` — e não havia por onde corrigir, juntar as duas
