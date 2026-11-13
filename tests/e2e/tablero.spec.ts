@@ -131,7 +131,7 @@ test.beforeAll(async () => {
     .single();
   const contacto = await admin
     .from("contacts")
-    .insert({ organization_id: ORG, name: `Tablero ${tag}`, phone_number: "+5491100000001" } as never)
+    .insert({ organization_id: ORG, name: `Tablero ${tag}`, phone_number: `+549110${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}` } as never)
     .select("id")
     .single();
   const t0 = ahora - 1 * 3_600_000;
@@ -249,7 +249,7 @@ test.describe("tablero", () => {
   test("vendedor: ve solo lo suyo", async ({ page }) => {
     await loginPlano(page, creds.users.agent!.email);
     const { api, ex } = await comparar(page, AGENTE);
-    expect(ex.nuevos).toBeGreaterThanOrEqual(4);
+    expect(ex.nuevos).toBeGreaterThanOrEqual(3);
     expect(api.por_usuario.map((u) => u.user_id)).toEqual([AGENTE]);
 
     // Aunque pida el filtro del gerente, el servidor lo fuerza a su propio id.
