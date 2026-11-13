@@ -86,6 +86,29 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
   }
 
   if (allowPlatformAdmin && user.is_platform_admin && !user.support) {
+    // El platform admin salta el rank del tenant, NO el MFA de sesión (H4): con
+    // aal1 y TOTP sin probar anonimizaba contactos o borraba canales de otro tenant.
+    if (await mfaEmDivida()) {
+      void audit({
+        action: "authz.denied",
+        actorUserId: user.id,
+        organizationId: org.orgId,
+        resourceType: resource ?? null,
+        requestId,
+        metadata: { reason: "mfa_required", platform_admin: true },
+      });
+      return {
+        ok: false,
+        response: fail(
+          "mfa_required",
+          t(
+            "Esta sessão precisa da verificação em duas etapas. Entre novamente com o código do aplicativo.",
+          ),
+          403,
+          { requestId },
+        ),
+      };
+    }
     return { ok: true, user, org };
   }
 
