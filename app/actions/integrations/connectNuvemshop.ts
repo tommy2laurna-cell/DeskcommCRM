@@ -11,7 +11,7 @@
 
 import { supportWriteError, authenticatedSessionId } from "@/lib/impersonate/support";
 import { redirect } from "next/navigation";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { buildAuthorizeUrl } from "@/lib/nuvemshop/oauth";
 import { getConfig } from "@/lib/nuvemshop/config";
 import { issueState } from "@/lib/nuvemshop/state";
@@ -32,6 +32,8 @@ export async function connectNuvemshop(): Promise<ConnectResult> {
   if (activeOrg.role !== "admin" && !user.is_platform_admin) {
     return { ok: false, error: "forbidden" };
   }
+  // Admin con sesión aal1 y TOTP sin probar no conecta integraciones (H3).
+  if (await mfaEmDivida()) return { ok: false, error: "forbidden" };
 
   const cfg = getConfig();
   if (!cfg) return { ok: false, error: "not_configured" };

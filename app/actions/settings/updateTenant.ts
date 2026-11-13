@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { audit } from "@/lib/audit";
 import { tenantSchema, type TenantInput } from "@/lib/schemas/settings";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 
 export type UpdateTenantResult =
@@ -29,6 +29,8 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
   if (!authUser.is_platform_admin && ROLE_RANK[activeOrg.role] < ROLE_RANK.admin) {
     return { ok: false, error: "forbidden_role" };
   }
+  // Admin con sesión aal1 y TOTP sin probar no escribe (H3).
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
 /**
  * A ESCRITA EM `organizations` VAI PELO ADMIN CLIENT — e não é preguiça.

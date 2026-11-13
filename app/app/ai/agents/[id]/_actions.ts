@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mensagemDoEscopo, validarEscopoDaVersao } from "@/lib/ai/agents/escopo";
@@ -52,6 +52,8 @@ async function ensureAdmin() {
   if (ROLE_RANK[activeOrg.role] < ROLE_RANK.admin) {
     return { ok: false as const, error: "forbidden_role" };
   }
+  // Admin con sesión aal1 y TOTP sin probar no publica ni revierte agentes (H3).
+  if (await mfaEmDivida()) return { ok: false as const, error: "mfa_required" };
   return { ok: true as const, authUser, activeOrg };
 }
 
