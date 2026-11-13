@@ -5,7 +5,7 @@
  * session — no body-derived ids ever).
  */
 import { supportWriteError } from "@/lib/impersonate/support";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OnboardingState } from "@/lib/schemas/onboarding";
 
@@ -33,17 +33,32 @@ export interface OnboardingCtx {
   email: string;
 }
 
+/**
+ * Todas las actions del onboarding escriben con service-role: el rol no puede
+ * salir del snapshot de la sesión. Pasa por `requireRole("admin")`, que lee el
+ * rol de la base (`fn_user_role_in_org`) y exige MFA probado en esta sesión.
+ * Un vendedor o viewer con la action en su bundle recibe `forbidden`.
+ */
 export async function requireOnboardingCtx(): Promise<OnboardingCtx> {
-  const user = await loadAuthUser();
-  if (!user) throw new OnboardingError("auth_required", "Auth required.");
+  const authz = await requireRole("admin", { resource: "onboarding" });
+  if (!authz.ok) {
+    const status = authz.response.status;
+    const body = (await authz.response.clone().json().catch(() => null)) as {
+      error?: { code?: string };
+    } | null;
+    if (status === 401) throw new OnboardingError("auth_required", "Auth required.");
+    if (body?.error?.code === "forbidden_tenant") {
+      throw new OnboardingError("no_active_org", "Sem organização ativa.");
+    }
+    throw new OnboardingError("forbidden", "Só o administrador da organização pode seguir.");
+  }
+  const { user, org } = authz;
   if (supportWriteError(user.support)) throw new OnboardingError("forbidden", "Acompanhamento somente leitura ou encerrado.");
-  const activeOrg = await resolveActiveOrg(user);
-  if (!activeOrg) throw new OnboardingError("no_active_org", "Sem organização ativa.");
   return {
     userId: user.id,
-    orgId: activeOrg.orgId,
-    orgName: activeOrg.name,
-    role: activeOrg.role,
+    orgId: org.orgId,
+    orgName: org.name,
+    role: org.role,
     fullName: user.full_name,
     email: user.email,
   };
