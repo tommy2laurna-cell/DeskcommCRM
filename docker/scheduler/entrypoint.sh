@@ -80,6 +80,9 @@ CRONS="
 # confirmado, futuro e ainda não avisado.
 */5 * * * *|45|api/v1/cron/agenda-reminder
 */15 * * * *|45|api/v1/cron/agenda-expira-pendentes
+# O PEDIDO DE RESEÑA. A cada 15 min: el pedido vence N días después de ganar, y la
+# precisión de minutos no importa. Barato: sin link o sin mensaje aprobado no envía.
+*/15 * * * *|60|api/v1/cron/review-requests
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.
@@ -92,6 +95,9 @@ CRONS="
 # no dia errado metade do mundo e de madrugada boa parte do resto. Barato: quem
 # não configurou a automação não chega a ser varrido.
 7 * * * *|60|api/v1/cron/contact-birthdays
+# LAS CAMPAÑAS. Cada minuto, un lote chico por campaña: el envío es escalonado
+# (espaciamiento + tope diario) y el cron solo reparte el trabajo en tandas.
+* * * * *|60|api/v1/cron/campaigns
 0 12 * * *|60|api/v1/cron/lgpd-sla-watcher
 30 3 * * *|120|api/v1/cron/kb-conversations-batch
 15 4 * * *|60|api/v1/cron/sync-model-catalog

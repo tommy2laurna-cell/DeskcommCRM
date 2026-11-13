@@ -27202,6 +27202,299 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
+-- ---- reseñas después de ganar y «lo recomendó» (migration 0277) ----
+create table if not exists public.review_requests (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  due_at timestamptz not null,
+  sent_at timestamptz,
+  status text not null default 'pendiente'
+    check (status in ('pendiente', 'enviado', 'sin_configurar', 'omitido', 'fallido')),
+  error text,
+  created_at timestamptz not null default now(),
+  constraint review_requests_lead_id_key unique (lead_id)
+);
+
+create index if not exists review_requests_org_status_due_idx
+  on public.review_requests (organization_id, status, due_at);
+
+alter table public.review_requests enable row level security;
+
+drop policy if exists review_requests_select on public.review_requests;
+create policy review_requests_select on public.review_requests
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+revoke all on public.review_requests from anon;
+
+alter table public.contacts
+  add column if not exists referred_by_contact_id uuid
+  references public.contacts(id) on delete set null;
+
+create index if not exists contacts_referred_by_idx
+  on public.contacts (organization_id, referred_by_contact_id)
+  where referred_by_contact_id is not null;
+
+
+-- ---- listas inteligentes (migration 0278) ----
+-- ============================================================================
+-- 0278 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
+--
+-- Una lista inteligente guarda los FILTROS (etiqueta, etapa, origen, puntaje,
+-- último contacto, cumpleaños del mes), nunca la lista de contactos. La
+-- membresía se recalcula en cada lectura con `fn_smart_list_contacts`: un
+-- contacto que cambia de etapa entra o sale solo, y nadie mantiene una copia
+-- que envejece.
+--
+-- La función es SQL porque dos de los filtros no existen como columna de
+-- `contacts`: la etapa y el puntaje viven en `crm_leads` / `crm_lead_scores`, y
+-- el mes de cumpleaños sale de `birthday_md`. Hacerlo por PostgREST obligaría a
+-- traer ids y devolverlos en un `.in()` de cientos de elementos: una URL que
+-- revienta. Con la función el cliente pagina por keyset (`id > cursor`) y la URL
+-- no crece con la lista.
+--
+-- SECURITY INVOKER a propósito: corre con los permisos de quien llama, así la
+-- RLS de `contacts` sigue mandando. Todos los parámetros null = sin ese filtro.
+-- ============================================================================
+
+create table if not exists public.smart_lists (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  filters jsonb not null default '{}'::jsonb check (jsonb_typeof(filters) = 'object'),
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists smart_lists_org_name_uidx
+  on public.smart_lists (organization_id, lower(name));
+
+alter table public.smart_lists enable row level security;
+
+drop policy if exists smart_lists_select on public.smart_lists;
+drop policy if exists smart_lists_manager_write on public.smart_lists;
+
+create policy smart_lists_select on public.smart_lists
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+create policy smart_lists_manager_write on public.smart_lists
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+revoke all on public.smart_lists from anon;
+
+drop trigger if exists trg_smart_lists_set_updated_at on public.smart_lists;
+create trigger trg_smart_lists_set_updated_at
+  before update on public.smart_lists
+  for each row execute function public.fn_set_updated_at();
+
+create or replace function public.fn_smart_list_contacts(
+  p_org uuid,
+  p_tags text[] default null,
+  p_stage_ids uuid[] default null,
+  p_sources text[] default null,
+  p_score_min numeric default null,
+  p_score_max numeric default null,
+  p_inactive_before timestamptz default null,
+  p_birthday_month integer default null
+) returns setof public.contacts
+language sql stable security invoker
+set search_path = public
+as $$
+  select c.*
+  from public.contacts c
+  where c.organization_id = p_org
+    and c.is_anonymized = false
+    and c.is_merged_into is null
+    and (p_tags is null or c.tags && p_tags)
+    and (p_sources is null or c.source = any (p_sources))
+    -- "hace más de N días": quien nunca tuvo actividad también cuenta.
+    and (p_inactive_before is null
+         or c.last_activity_at is null
+         or c.last_activity_at < p_inactive_before)
+    and (p_birthday_month is null
+         or c.birthday_md between p_birthday_month * 100 + 1 and p_birthday_month * 100 + 31)
+    -- etapa y puntaje se evalúan sobre el MISMO negocio abierto del contacto.
+    and ((p_stage_ids is null and p_score_min is null and p_score_max is null)
+         or exists (
+           select 1
+           from public.crm_leads l
+           left join public.crm_lead_scores s on s.lead_id = l.id
+           where l.organization_id = p_org
+             and l.contact_id = c.id
+             and l.status = 'open'
+             and (p_stage_ids is null or l.stage_id = any (p_stage_ids))
+             and ((p_score_min is null and p_score_max is null)
+                  or (s.ai_probability is not null
+                      and (p_score_min is null or s.ai_probability >= p_score_min)
+                      and (p_score_max is null or s.ai_probability <= p_score_max)))
+         ));
+$$;
+
+revoke execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) from public, anon;
+grant execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) to authenticated, service_role;
+
+
+-- ---- campañas y tarifa de Meta (migration 0279) ----
+-- ============================================================================
+-- 0279 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
+--
+-- `campaigns` guarda el borrador y el estado; `campaign_recipients` es UNA fila
+-- por (campaña, contacto), materializada al confirmar. El `unique` es lo que
+-- vuelve idempotente el reintento del cron: un contacto no puede tener dos
+-- filas, y una fila `enviado` no vuelve a enviarse.
+--
+-- Estados del destinatario: pendiente | enviado | excluido_optout |
+-- excluido_sin_telefono | error. El opt-out se REVALÚA justo antes de cada envío
+-- (el contacto pudo pedir la baja entre la confirmación y el envío), por eso un
+-- `pendiente` puede terminar en `excluido_optout`.
+--
+-- `claimed_at` es un arriendo corto: dos ticks del cron que se solapan no toman
+-- el mismo destinatario.
+--
+-- La tarifa de Meta NO se inventa: vive en `organizations.settings.campaigns.tarifa`
+-- y la escribe `fn_set_campaign_tarifa` (un solo UPDATE atómico sobre el jsonb,
+-- sin read-modify-write: el jsonb `settings` ya tiene escritores que se pisan).
+-- ============================================================================
+
+create table if not exists public.campaigns (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 120),
+  list_id uuid references public.smart_lists(id) on delete set null,
+  channel_session_id uuid references public.channel_sessions(id) on delete set null,
+  template_name text not null,
+  template_language text not null,
+  template_category text not null check (template_category in ('marketing', 'utility', 'authentication')),
+  template_values jsonb not null default '{}'::jsonb check (jsonb_typeof(template_values) = 'object'),
+  status text not null default 'borrador'
+    check (status in ('borrador', 'confirmada', 'enviando', 'completada', 'cancelada')),
+  scheduled_at timestamptz,
+  confirmed_at timestamptz,
+  confirmed_by_user_id uuid references auth.users(id) on delete set null,
+  total_recipients integer not null default 0,
+  total_sent integer not null default 0,
+  total_excluded integer not null default 0,
+  total_error integer not null default 0,
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists campaigns_org_status_idx
+  on public.campaigns (organization_id, status);
+
+create table if not exists public.campaign_recipients (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  status text not null default 'pendiente'
+    check (status in ('pendiente', 'enviado', 'excluido_optout', 'excluido_sin_telefono', 'error')),
+  reason text,
+  external_id text,
+  attempts integer not null default 0,
+  claimed_at timestamptz,
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint campaign_recipients_campaign_contact_key unique (campaign_id, contact_id)
+);
+
+create index if not exists campaign_recipients_campaign_status_idx
+  on public.campaign_recipients (campaign_id, status);
+create index if not exists campaign_recipients_org_sent_idx
+  on public.campaign_recipients (organization_id, sent_at)
+  where status = 'enviado';
+
+alter table public.campaigns enable row level security;
+alter table public.campaign_recipients enable row level security;
+
+drop policy if exists campaigns_select on public.campaigns;
+drop policy if exists campaigns_manager_write on public.campaigns;
+drop policy if exists campaign_recipients_select on public.campaign_recipients;
+
+create policy campaigns_select on public.campaigns
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+create policy campaigns_manager_write on public.campaigns
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+-- Los destinatarios los escribe SOLO el servidor (service_role, que ignora RLS).
+create policy campaign_recipients_select on public.campaign_recipients
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+revoke all on public.campaigns from anon;
+revoke all on public.campaign_recipients from anon;
+revoke insert, update, delete on public.campaign_recipients from authenticated;
+
+drop trigger if exists trg_campaigns_set_updated_at on public.campaigns;
+create trigger trg_campaigns_set_updated_at
+  before update on public.campaigns
+  for each row execute function public.fn_set_updated_at();
+
+drop trigger if exists trg_campaign_recipients_set_updated_at on public.campaign_recipients;
+create trigger trg_campaign_recipients_set_updated_at
+  before update on public.campaign_recipients
+  for each row execute function public.fn_set_updated_at();
+
+-- Tarifa vigente de Meta, editable por admin. `p_tarifa` null = borrarla.
+create or replace function public.fn_set_campaign_tarifa(p_org uuid, p_tarifa jsonb)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if not public.fn_role_at_least(p_org, 'admin') then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{campaigns}',
+           (coalesce(settings -> 'campaigns', '{}'::jsonb) - 'tarifa')
+             || case when p_tarifa is null then '{}'::jsonb
+                     else jsonb_build_object('tarifa', p_tarifa) end,
+           true)
+   where id = p_org;
+end;
+$$;
+
+revoke execute on function public.fn_set_campaign_tarifa(uuid, jsonb) from public, anon;
+grant execute on function public.fn_set_campaign_tarifa(uuid, jsonb) to authenticated, service_role;
+
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna

@@ -590,6 +590,21 @@ export const AUDIT_ACTIONS = [
   // "quando esta chave foi trocada, e por quem" é a pergunta que só esta linha
   // responde — a coluna `updated_at` se move por qualquer motivo.
   "ai.credential_updated",
+  // Reseñas y referidos (migración 0277).
+  "reviews.config_changed",
+  "reviews.pedido_enviado",
+  "contact.referred_by_changed",
+  // Listas inteligentes y campañas por la API de Meta (migraciones 0278/0279).
+  "smart_list.created",
+  "smart_list.updated",
+  "smart_list.deleted",
+  "campaign.created",
+  "campaign.updated",
+  "campaign.deleted",
+  "campaign.confirmed",
+  "campaign.cancelled",
+  "campaign.batch_sent",
+  "campaign.tarifa_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

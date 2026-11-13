@@ -224,6 +224,38 @@ async function aplicarOptOut(admin: Admin, entrada: EntradaDeMensagem): Promise<
       return;
     }
 
+    // Además del bloqueo, deja la baja registrada en el consentimiento
+    // (`consent.marketing.declined_at`): es la clave que lee la guarda de las
+    // campañas y la que explica el POR QUÉ en el dossier. El bloqueo de arriba ya
+    // frena el envío; si este paso falla, solo se pierde el registro.
+    try {
+      const { data: actual } = await admin
+        .from("contacts")
+        .select("consent")
+        .eq("organization_id", entrada.organizationId)
+        .eq("id", entrada.contactId)
+        .maybeSingle();
+      const consent = ((actual as { consent?: unknown } | null)?.consent ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const marketing = (consent.marketing ?? {}) as Record<string, unknown>;
+      if (!marketing.declined_at) {
+        const { error: erroConsent } = await admin
+          .from("contacts")
+          .update({ consent: { ...consent, marketing: { ...marketing, declined_at: agora } } })
+          .eq("organization_id", entrada.organizationId)
+          .eq("id", entrada.contactId);
+        if (erroConsent) throw new Error(erroConsent.message);
+      }
+    } catch (err) {
+      logger.warn("pos-entrada: declined_at NAO gravado (o bloqueio sim)", {
+        organization_id: entrada.organizationId,
+        contact_id: entrada.contactId,
+        detail: err instanceof Error ? err.message.slice(0, 160) : "desconhecido",
+      });
+    }
+
     await audit({
       action: "contact.blocked",
       organizationId: entrada.organizationId,

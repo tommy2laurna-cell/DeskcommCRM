@@ -24,6 +24,7 @@ import { ConversaNoDossie } from "@/components/kanban/ConversaNoDossie";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { DialButton } from "@/components/voice/DialButton";
+import { LoRecomendo } from "@/components/contacts/LoRecomendo";
 
 interface Props {
   contactId: string;
@@ -208,6 +209,14 @@ export function ContactDetailClient({ contactId }: Props) {
                       ))}
                 </dd>
               </div>
+              <LoRecomendo
+                contactId={contactId}
+                podeEditar={
+                  !contact.is_anonymized &&
+                  user.support?.access_mode !== "support_readonly" &&
+                  Boolean(activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent)
+                }
+              />
             </dl>
           </Card>
         </TabsContent>

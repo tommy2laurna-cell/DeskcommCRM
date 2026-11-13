@@ -136,6 +136,59 @@ jobs:
       - name: update.sh sobre banco COM DADOS (pg${{ matrix.pg }})
         run: pnpm test:db:update
 
+  # Jornada de campañas: lista inteligente -> campaña con transporte SIMULADO ->
+  # quien registró la baja NO recibe. Corre SOLO tests/journeys/campanas.spec.ts.
+  #
+  # NO MEDIDO: escrito sin poder correrlo (sin Docker ni Supabase local donde se
+  # hizo). Sigue los pasos que documentan scripts/gerar-env-e2e.sh y
+  # scripts/e2e-build.sh. No es un check obligatorio: no entra en `needs` de
+  # `invariants`. CAMPAIGNS_TRANSPORT=simulado va en el entorno de `next start`:
+  # el cron marca el envío con un id `sim:` y NUNCA llama a la Graph API.
+  jornada-campanas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_PORT: "3002"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Supabase local (aplica supabase/migrations)
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit
+
+      - name: Ambiente e2e y build
+        run: |
+          pnpm e2e:env
+          pnpm e2e:build
+
+      - name: Sembrar credenciales e2e
+        run: |
+          set -a; . ./.env.e2e; set +a
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+
+      - name: Levantar la app con transporte simulado
+        run: |
+          set -a; . ./.env.e2e; set +a
+          export CAMPAIGNS_TRANSPORT=simulado
+          nohup pnpm exec next start --port "$E2E_PORT" > app.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS "http://localhost:$E2E_PORT/api/v1/health" >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          cat app.log; exit 1
+
+      - name: Jornada de campañas
+        run: |
+          set -a; . ./.env.e2e; set +a
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test -c tests/journeys/playwright.config.ts --project=chromium campanas.spec.ts
+
   # O NOME DESTE JOB É O CHECK OBRIGATÓRIO, e é por isso que ele existe — mesmo
   # padrão do `e2e` em e2e.yml e do `imagens-ok` em publish-image.yml.
   #

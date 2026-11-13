@@ -213,7 +213,13 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
           const tipo = str(raw.type) ?? "unknown";
           const corpoMidia = tipo !== "contacts" ? (raw[tipo] as Record<string, unknown> | undefined) : undefined;
           const sharedContact = tipo === "contacts" ? parseMetaInboundContact(raw) : null;
-          const tipoCrm = tipo === "contacts" ? "contact" : tipo;
+          // Toque en un botón de respuesta rápida de un mensaje aprobado: la Meta lo
+          // entrega como `type: "button"` y el texto del botón en `button.text`. Es
+          // texto elegido por la persona; tratarlo como texto es lo que permite que
+          // el botón de baja de las campañas llegue al detector de opt-out.
+          const textoDeBoton =
+            tipo === "button" ? str((raw.button as Record<string, unknown> | undefined)?.text) : null;
+          const tipoCrm = tipo === "contacts" ? "contact" : textoDeBoton ? "text" : tipo;
 
           out.push({
             kind: "inbound_message",
@@ -227,7 +233,7 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
             type: tipoCrm,
             text:
               tipoCrm === "text"
-                ? str((raw.text as Record<string, unknown>)?.body)
+                ? (textoDeBoton ?? str((raw.text as Record<string, unknown>)?.body))
                 : sharedContact?.name ?? null,
             ...(sharedContact ? { sharedContact } : {}),
             media:

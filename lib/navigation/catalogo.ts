@@ -182,6 +182,27 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // Filtros guardados (etiqueta, etapa, origem, pontuação...). A lista se
+    // recalcula a cada leitura; é a base das campanhas.
+    href: "/app/listas",
+    label: "Listas inteligentes",
+    description: "Grupos de contatos que se atualizam sozinhos, por etiqueta, etapa, origem ou aniversário.",
+    icon: "Users",
+    group: "crm",
+    section: "O dia a dia da venda",
+    minRole: "manager",
+  },
+  {
+    // Mensagem aprovada da Meta enviada a uma lista, só pela API oficial.
+    href: "/app/campanas",
+    label: "Campanhas",
+    description: "Envie uma mensagem aprovada da Meta a uma lista, com prévia, custo e botão de saída.",
+    icon: "Flag",
+    group: "crm",
+    section: "O dia a dia da venda",
+    minRole: "manager",
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ
@@ -571,6 +592,36 @@ export const NAV_CATALOG = [
     icon: "UsersThree",
     group: "organizacao",
     section: "Sua empresa",
+  },
+  {
+    // Reseñas pós-venda: link do Google + mensagem aprovada que o cron
+    // `cron/review-requests` envia N dias depois de ganhar um negócio.
+    href: "/app/settings/resenas",
+    label: "Avaliações",
+    description: "O link de avaliações do Google que o cliente recebe alguns dias depois de fechar.",
+    icon: "Flag",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    // Quem indicou quem: lê `contacts.referred_by_contact_id` (campo da ficha).
+    href: "/app/analise/referidos",
+    label: "Quem traz mais clientes",
+    description: "Quem mais indicou clientes e quantos deles fecharam negócio.",
+    icon: "UsersThree",
+    group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
+  },
+  {
+    // Os dois cartões de reativação: contatos dormidos e aniversários da semana.
+    href: "/app/analise/reativar",
+    label: "Dormidos e aniversários",
+    description: "Quem está sem movimento há semanas e quem faz aniversário nesta semana.",
+    icon: "ClockCountdown",
+    group: "analise",
+    section: "Os números do período",
   },
   {
     // A porta que faltava (issue #144): rodízio de atendimento e restrição de
