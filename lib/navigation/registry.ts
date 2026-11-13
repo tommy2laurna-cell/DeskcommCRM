@@ -27,6 +27,7 @@ import {
   Palette,
   Plugs,
   PlugsConnected,
+  QrCode,
   PuzzlePiece,
   Receipt,
   Robot,

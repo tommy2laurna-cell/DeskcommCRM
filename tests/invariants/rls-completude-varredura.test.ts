@@ -106,6 +106,12 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "`countAs` real.",
   },
   {
+    tabela: "capture_forms",
+    razao:
+      "tests/invariants/webhooks-rls.test.ts (\"capture_forms\": manager B no ve el formulario de A, " +
+      "agent A no puede escribir) prueba aislamiento con `countAs` real.",
+  },
+  {
     tabela: "automation_rules",
     razao: "tests/invariants/webhooks-rls.test.ts — mesmo caso da linha acima.",
   },

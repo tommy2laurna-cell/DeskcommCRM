@@ -30,6 +30,8 @@ const WH_SOURCE = "ffffffff-5555-4000-8000-000000000001";
 const WH_SOURCE_AGENT_PROBE = "ffffffff-5555-4000-8000-000000000002";
 const WH_RULE = "ffffffff-5555-4000-8000-000000000003";
 const WH_RUN = "ffffffff-5555-4000-8000-000000000004";
+const CAP_FORM = "ffffffff-5555-4000-8000-000000000005";
+const CAP_FORM_AGENT_PROBE = "ffffffff-5555-4000-8000-000000000006";
 
 beforeAll(() => {
   seedGov();
@@ -123,5 +125,31 @@ describe("webhook_sources + automation_rules + automation_rule_runs — RLS (mig
        values ('${GOV_ORG}', '${WH_RULE}', 'success')`,
     );
     expect(inserted).toBe(0);
+  });
+});
+
+describe("capture_forms — RLS (migration 0277)", () => {
+  it("manager A crea un formulario en la org A; manager B no lo ve; manager A sí", () => {
+    const creado = writeCountAs(
+      GOV_MANAGER,
+      `insert into public.capture_forms
+         (id, organization_id, slug, name, pipeline_id, stage_id)
+       values
+         ('${CAP_FORM}', '${GOV_ORG}', 'captarrls0001', 'Formulario RLS', '${GOV_PIPELINE}', '${GOV_STAGE}')`,
+    );
+    expect(creado).toBe(1);
+    expect(countAs(WH_MANAGER_B, `select count(*) from public.capture_forms where id = '${CAP_FORM}';`)).toBe(0);
+    expect(countAs(GOV_MANAGER, `select count(*) from public.capture_forms where id = '${CAP_FORM}';`)).toBe(1);
+  });
+
+  it("agent A no puede escribir en capture_forms (write es manager+)", () => {
+    const insertado = writeCountAs(
+      GOV_AGENT_A,
+      `insert into public.capture_forms
+         (id, organization_id, slug, name, pipeline_id, stage_id)
+       values
+         ('${CAP_FORM_AGENT_PROBE}', '${GOV_ORG}', 'captarrls0002', 'Probe agent', '${GOV_PIPELINE}', '${GOV_STAGE}')`,
+    );
+    expect(insertado).toBe(0);
   });
 });
