@@ -100,7 +100,7 @@ async function handle(req: NextRequest): Promise<Response> {
   if (filas.length > 0) {
     const { error } = await admin
       .from("review_requests")
-      .upsert(filas.map((f) => ({ organization_id: f.organization_id, ...f })), { onConflict: "lead_id", ignoreDuplicates: true });
+      .upsert(filas.map((f) => ({ organization_id: f.organization_id, lead_id: f.lead_id, contact_id: f.contact_id, due_at: f.due_at })), { onConflict: "lead_id", ignoreDuplicates: true });
     if (error) {
       logger.error("[review-requests] materializar falhou", { error: error.message, requestId });
       return fail("internal_error", "Falha ao registrar pedidos.", 500, { requestId });
