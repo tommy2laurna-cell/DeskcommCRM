@@ -76,6 +76,8 @@ test.beforeAll(async () => {
     .select("id,pipeline_id,position")
     .eq("organization_id", ORG)
     .eq("is_archived", false)
+    .eq("is_won", false)
+    .eq("is_lost", false)
     .order("position");
   const e = etapas as { id: string; pipeline_id: string; position: number }[];
   const pipeline = e[0]!.pipeline_id;
@@ -323,7 +325,7 @@ test.describe("celular 390 px", () => {
     await tarjeta.check({ force: true });
     await foto("3-lead-seleccionado");
     await page.getByRole("button", { name: /Mover (para|a)/i }).click();
-    const destino = (await admin.from("crm_stages").select("name").eq("pipeline_id", PIPELINE).eq("is_archived", false).order("position").limit(2)).data as { name: string }[];
+    const destino = (await admin.from("crm_stages").select("name").eq("pipeline_id", PIPELINE).eq("is_archived", false).eq("is_won", false).eq("is_lost", false).order("position").limit(2)).data as { name: string }[];
     await page.getByRole("menuitem", { name: destino[1]!.name }).click();
     await expect.poll(enPrimera, { timeout: 15_000 }).toBe(antes - 1);
     await sinScrollLateral();
