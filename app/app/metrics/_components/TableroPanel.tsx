@@ -29,7 +29,7 @@ function Num({ href, children, label }: { href: string; children: React.ReactNod
     <Link
       href={href}
       aria-label={label}
-      className="inline-flex min-h-11 items-center rounded px-1 font-semibold tabular-nums underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"
+      className="inline-flex min-h-11 items-center rounded-md px-1 font-semibold tabular-nums underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"
     >
       {children}
     </Link>

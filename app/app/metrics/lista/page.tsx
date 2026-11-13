@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { requireAuth } from "@/lib/auth/server";
+import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 import { pesos, type TipoDeLista } from "@/lib/reports/tablero";
@@ -24,6 +24,7 @@ export default async function ListaDelTablero({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireAuth();
+  const org = await resolveActiveOrg(user);
   const t = (s: string) => traduzir(s, user.idioma);
   const sp = await searchParams;
   const tipo = (["nuevos", "ganados", "perdidos"].includes(una(sp.tipo) ?? "") ? una(sp.tipo) : "nuevos") as TipoDeLista;
@@ -32,7 +33,7 @@ export default async function ListaDelTablero({
   const source = una(sp.source);
   const owner = una(sp.owner);
   const stage = una(sp.stage);
-  const valido = !!from && !!to && ISO.test(from) && ISO.test(to) && (!owner || UUID.test(owner)) && (!stage || UUID.test(stage));
+  const valido = !!org && !!from && !!to && ISO.test(from) && ISO.test(to) && (!owner || UUID.test(owner)) && (!stage || UUID.test(stage));
 
   let filas: { id: string; title: string; source: string; status: string; value_cents: number | null; currency: string | null }[] = [];
   if (valido) {
@@ -40,6 +41,7 @@ export default async function ListaDelTablero({
     let q = supabase
       .from("crm_leads")
       .select("id,title,source,status,value_cents,currency")
+      .eq("organization_id", org!.orgId)
       .gte(tipo === "nuevos" ? "created_at" : "closed_at", from)
       .lt(tipo === "nuevos" ? "created_at" : "closed_at", to)
       .order("created_at", { ascending: false })
@@ -48,11 +50,12 @@ export default async function ListaDelTablero({
     if (source) q = q.eq("source", source);
     if (owner) q = q.eq("owner_user_id", owner);
     if (stage) {
-      const { data: e } = await supabase.from("crm_stages").select("pipeline_id,position").eq("id", stage).single();
+      const { data: e } = await supabase.from("crm_stages").select("pipeline_id,position").eq("organization_id", org!.orgId).eq("id", stage).single();
       if (e) {
         const { data: ids } = await supabase
           .from("crm_stages")
           .select("id")
+          .eq("organization_id", org!.orgId)
           .eq("pipeline_id", e.pipeline_id)
           .gte("position", e.position);
         q = q

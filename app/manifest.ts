@@ -14,8 +14,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     theme_color: marca.accent,
     icons: [
       { src: "/icon", sizes: "64x64", type: "image/png" },
-      { src: "/icone/192", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icone/512", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icone/192", sizes: "192x192", type: "image/png" },
+      { src: "/icone/512", sizes: "512x512", type: "image/png" },
     ],
   };
 }
