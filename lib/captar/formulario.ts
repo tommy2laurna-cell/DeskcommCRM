@@ -152,6 +152,24 @@ export function validarEnvio(campos: Campo[], envio: EnvioCrudo): ResultadoDeVal
 }
 
 /**
+ * Claves que la captación interpreta (alias de nombre/teléfono/email, el
+ * `external_id` que deduplica leads, `utm_*` y las propias de este archivo).
+ * Un campo libre cuyo rótulo coincida NO puede usarse tal cual: un rótulo
+ * «external_id» haría que todos los envíos se deduplicaran en uno solo, y
+ * «Mail» pisaría el email. Se guarda con el prefijo «campo: ».
+ */
+const CLAVES_RESERVADAS = new Set([
+  "name", "nome", "full_name", "fullname", "phone", "telefone", "whatsapp", "celular",
+  "phone_number", "tel", "email", "e-mail", "mail", "external_id", "formulario",
+  "consentimiento_datos", "consentimiento_datos_fecha", "consentimiento_datos_texto",
+]);
+
+export function claveDelCampoLibre(label: string): string {
+  const l = label.trim().toLowerCase();
+  return CLAVES_RESERVADAS.has(l) || l.startsWith("utm_") ? `campo: ${label}` : label;
+}
+
+/**
  * El cuerpo que recibe la captación de siempre. Los tres campos fijos van con
  * las claves que ella reconoce (`name`, `phone`, `email`); el resto, bajo el
  * rótulo del campo. El consentimiento viaja con fecha y texto: queda en el
@@ -170,7 +188,7 @@ export function payloadDelEnvio(
     if (c.id === ID_NOMBRE) payload.name = v;
     else if (c.id === ID_TELEFONO) payload.phone = v;
     else if (c.id === ID_EMAIL) payload.email = v;
-    else payload[c.label] = v;
+    else payload[claveDelCampoLibre(c.label)] = v;
   }
   payload.consentimiento_datos = "aceptado";
   payload.consentimiento_datos_fecha = ahora.toISOString();

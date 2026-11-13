@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { senueloCompleto } from "@/lib/captar/antispam";
 import {
   camposIniciales,
+  claveDelCampoLibre,
   definicionSchema,
   limpiarUtm,
   nuevoSlug,
@@ -118,6 +119,17 @@ describe("validación del envío", () => {
       consentimiento_datos_texto: "Acepto",
     });
     expect(p).not.toHaveProperty("email");
+  });
+
+  it("un rótulo reservado no puede pisar external_id, el email ni los utm", () => {
+    expect(claveDelCampoLibre("external_id")).toBe("campo: external_id");
+    expect(claveDelCampoLibre("Mail")).toBe("campo: Mail");
+    expect(claveDelCampoLibre("UTM_campaign")).toBe("campo: UTM_campaign");
+    expect(claveDelCampoLibre("Tamaño")).toBe("Tamaño");
+    const campos: Campo[] = [...camposIniciales(), { id: "x", label: "external_id", tipo: "texto", requerido: false }];
+    const p = payloadDelEnvio({ name: "F", fields: campos, consent_text: "" }, { nombre: "Ana", telefono: "1", x: "7" }, {}, new Date());
+    expect(p).not.toHaveProperty("external_id");
+    expect(p["campo: external_id"]).toBe("7");
   });
 
   it("limpiarUtm solo deja las cinco claves utm y recorta largos", () => {
