@@ -65,6 +65,10 @@ const DIR = join(process.cwd(), ".github/workflows");
  */
 const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string }> = {
   // --- a cadeia que leva o conserto até a VPS ---------------------------------
+  "seguir.yml::recetas": {
+    condicao: null,
+    efeito: "Journey de las recetas (prender, turno, reloj, envío); sin él el motor de recetas queda sin medir.",
+  },
   "publish-image.yml::a-tag-veio-da-main": {
     condicao: null,
     efeito:

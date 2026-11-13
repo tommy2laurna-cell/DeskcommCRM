@@ -23,7 +23,9 @@ import { X } from "lucide-react";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia } from "@/hooks/inbox/useUploadMedia";
 import { imagemDoClipboard } from "@/lib/inbox/clipboard-image";
-import { interpolateTemplate } from "@/lib/inbox/template-vars";
+import { apiClient } from "@/lib/api/client";
+import { interpolateTemplate, proximoTurno, usaTurno } from "@/lib/inbox/template-vars";
+import { textoDelTurno } from "@/lib/recetas/turno";
 import { cn } from "@/lib/utils";
 
 export interface ComposerHandle {
@@ -144,8 +146,31 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     );
   }
 
-  function applyTemplate(t: MessageTemplate) {
-    const filled = interpolateTemplate(t.body, { name: contactName ?? null });
+  /** El próximo turno confirmado del contacto, solo si el texto lo pide. */
+  async function turnoDelContacto(body: string): Promise<string | null> {
+    if (!usaTurno(body) || !currentContactId) return null;
+    try {
+      const ahora = new Date();
+      const qs = new URLSearchParams({
+        contact_id: currentContactId,
+        de: ahora.toISOString(),
+        situacao: "confirmed",
+        limite: "10",
+      });
+      const r = await apiClient.get<{ data: Array<{ starts_at: string }> }>(
+        `/api/v1/agenda/agendamentos?${qs.toString()}`,
+      );
+      const proximo = proximoTurno(r.data ?? [], ahora);
+      return proximo ? textoDelTurno(proximo, Intl.DateTimeFormat().resolvedOptions().timeZone) : null;
+    } catch {
+      // Sin agenda a mano, {turno} queda literal: el atendente lo ve y lo completa.
+      return null;
+    }
+  }
+
+  async function applyTemplate(t: MessageTemplate) {
+    const turno = await turnoDelContacto(t.body);
+    const filled = interpolateTemplate(t.body, { name: contactName ?? null, turno });
     setText(filled);
     setMenuDismissed(true);
     const ta = taRef.current;

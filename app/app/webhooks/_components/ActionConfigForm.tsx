@@ -24,7 +24,11 @@ import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
 
 export type ActionItem =
   | { type: "create_or_move_lead"; config: { pipeline_id: string; stage_id: string } }
-  | { type: "send_whatsapp_message"; config: { channel_session_id: string; template: string } }
+  | {
+      type: "send_whatsapp_message";
+      // `meta_template` lo escriben las recetas: el editor lo conserva sin mostrarlo.
+      config: { channel_session_id: string; template: string; meta_template?: unknown };
+    }
   | {
       type: "send_ai_message";
       config: { agent_id: string; channel_session_id: string; instruction: string };
@@ -32,7 +36,8 @@ export type ActionItem =
   | { type: "add_tag"; config: { tags: string[] } }
   | { type: "assign_owner"; config: { user_id: string } }
   | { type: "call_webhook"; config: { url: string; secret?: string; secret_enc?: string } }
-  | { type: "start_message_flow"; config: { flow_pointer_id: string } };
+  | { type: "start_message_flow"; config: { flow_pointer_id: string } }
+  | { type: "notify_owner"; config: { title: string } };
 
 export function defaultActionConfig(type: ActionItem["type"]): ActionItem {
   switch (type) {
@@ -50,6 +55,8 @@ export function defaultActionConfig(type: ActionItem["type"]): ActionItem {
       return { type, config: { url: "" } };
     case "start_message_flow":
       return { type, config: { flow_pointer_id: "" } };
+    case "notify_owner":
+      return { type, config: { title: "" } };
   }
 }
 
@@ -125,7 +132,7 @@ const TEMPLATE_VARS = [
 function SendWhatsappForm({
   config,
   onChange,
-}: FormProps<{ channel_session_id: string; template: string }>) {
+}: FormProps<{ channel_session_id: string; template: string; meta_template?: unknown }>) {
   const t = useT();
   const { data: sessions } = useChannelSessions();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -312,6 +319,21 @@ function AddTagForm({ config, onChange }: FormProps<{ tags: string[] }>) {
   );
 }
 
+function NotifyOwnerForm({ config, onChange }: FormProps<{ title: string }>) {
+  const t = useT();
+  return (
+    <div className="space-y-1">
+      <Label>{t("Título da tarefa")}</Label>
+      <Input
+        value={config.title}
+        maxLength={200}
+        placeholder={t("Lead sem movimento: {{nome}}")}
+        onChange={(e) => onChange({ title: e.target.value })}
+      />
+    </div>
+  );
+}
+
 function AssignOwnerForm({ config, onChange }: FormProps<{ user_id: string }>) {
   const t = useT();
   const { data: members } = useAssignableMembers(true);
@@ -475,6 +497,13 @@ export function ActionConfigForm({
     case "start_message_flow":
       return (
         <StartMessageFlowForm
+          config={action.config}
+          onChange={(config) => onChange({ type: action.type, config })}
+        />
+      );
+    case "notify_owner":
+      return (
+        <NotifyOwnerForm
           config={action.config}
           onChange={(config) => onChange({ type: action.type, config })}
         />

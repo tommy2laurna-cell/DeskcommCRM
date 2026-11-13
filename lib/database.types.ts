@@ -2032,6 +2032,7 @@ export type Database = {
           last_run_at: string | null
           name: string
           organization_id: string
+          recipe_key: string | null
           run_count: number
           trigger_event: string
           updated_at: string
@@ -2048,6 +2049,7 @@ export type Database = {
           last_run_at?: string | null
           name: string
           organization_id: string
+          recipe_key?: string | null
           run_count?: number
           trigger_event: string
           updated_at?: string
@@ -2064,6 +2066,7 @@ export type Database = {
           last_run_at?: string | null
           name?: string
           organization_id?: string
+          recipe_key?: string | null
           run_count?: number
           trigger_event?: string
           updated_at?: string
@@ -3441,6 +3444,7 @@ export type Database = {
           service_closed_at: string | null
           service_revision: number
           service_started_at: string | null
+          sin_responder: boolean | null
           snooze_until: string | null
           snoozed_at: string | null
           snoozed_by_user_id: string | null

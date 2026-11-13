@@ -22,6 +22,8 @@ import type { ActionResultDetail } from "@/lib/automation/types";
 import { audit } from "@/lib/audit";
 import { ENTIDADE_ESPERADA_POR_GATILHO } from "@/lib/schemas/webhooks";
 import { logger } from "@/lib/logger";
+import { textoDelTurno } from "@/lib/recetas/turno";
+import { normalizarIdioma } from "@/lib/i18n/idiomas";
 
 export const AUTOMATION_CONSUMER_KEY = "automation-rules";
 
@@ -76,6 +78,19 @@ export async function buildContext(admin: SupabaseClient, row: EventRow): Promis
       .maybeSingle();
     if (appointment) {
       context.appointment = appointment;
+      // `{{turno}}` en los textos de las recetas: cuándo es, en el fuso del negocio.
+      const { data: organizacion } = await admin
+        .from("organizations")
+        .select("timezone, locale")
+        .eq("id", org)
+        .maybeSingle();
+      context.turno = {
+        texto: textoDelTurno(
+          new Date(appointment.starts_at as string),
+          (organizacion?.timezone as string | null) ?? "America/Argentina/Buenos_Aires",
+          normalizarIdioma(organizacion?.locale),
+        ),
+      };
       // O contato sai do COMPROMISSO, não do payload: quem escreve a regra vai
       // querer `contact.name` no texto da mensagem, e a linha do banco é a
       // versão de agora — o payload é a de quando o evento nasceu.
