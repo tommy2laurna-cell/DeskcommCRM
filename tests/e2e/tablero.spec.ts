@@ -98,7 +98,7 @@ test.beforeAll(async () => {
     status: o.status ?? "open",
     value_cents: o.value_cents ?? null,
     currency: o.currency ?? "ARS",
-    lost_reason: o.status === "lost" ? "precio" : null,
+    lost_reason: o.status === "lost" ? "price" : null,
     created_at: new Date(ahora - o.created).toISOString(),
     closed_at: o.closed_at ?? null,
   });
