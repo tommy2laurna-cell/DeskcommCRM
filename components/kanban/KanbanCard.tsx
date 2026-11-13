@@ -10,6 +10,8 @@ import { NextActionSlot } from "./NextActionSlot";
 import { ReactivationSlot } from "./ReactivationSlot";
 import { ConversaSlot } from "./ConversaSlot";
 import { ScoreSlot } from "./ScoreSlot";
+import { PuntajeChip } from "./PuntajeChip";
+import type { PuntajeCalculado } from "@/lib/puntaje/reglas";
 import { OwnerBadge } from "./OwnerBadge";
 
 /** Os dois gestos de seleção que o card sabe relatar. */
@@ -35,6 +37,8 @@ interface KanbanCardProps {
    * o segundo evento dentro da janela passar despercebido.
    */
   pulseCount?: number;
+  /** Puntaje de prioridad (reglas de la organización); ausente = no se muestra. */
+  puntaje?: PuntajeCalculado | null;
   /**
    * `alterna` = um card entra/sai da seleção. `intervalo` = daqui até a âncora
    * (shift). Quem resolve o intervalo é a COLUNA, que é a única que conhece a
@@ -78,6 +82,7 @@ export function KanbanCard({
   isSelected,
   isSelecting = false,
   pulseCount = 0,
+  puntaje,
   onSelect,
   onOpen,
 }: KanbanCardProps) {
@@ -242,14 +247,17 @@ export function KanbanCard({
           </div>
 
           {/* ② valor — altura reservada mesmo sem valor, senão o card encolhe. */}
-          <p
-            className={cn(
-              "mt-1 h-5 text-xs font-medium leading-5 tabular-nums",
-              value ? "text-text" : "text-text-muted",
-            )}
-          >
-            {value ?? "—"}
-          </p>
+          <div className="mt-1 flex h-5 items-center justify-between gap-2">
+            <p
+              className={cn(
+                "text-xs font-medium leading-5 tabular-nums",
+                value ? "text-text" : "text-text-muted",
+              )}
+            >
+              {value ?? "—"}
+            </p>
+            {puntaje && <PuntajeChip puntaje={puntaje} />}
+          </div>
 
           {/* ③ a linha do agente — um slot, três estados, nunca três blocos. */}
           <div className="mt-1.5 flex h-6 items-center gap-2 text-xs">

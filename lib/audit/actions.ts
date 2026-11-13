@@ -240,6 +240,14 @@ export const AUDIT_ACTIONS = [
   "leads.bulk_assigned",
   "attendant.availability_changed",
   "routing.config_changed",
+  // Cambiar las reglas del puntaje cambia quién aparece primero para todo el
+  // equipo: es configuración de la organización, no preferencia de pantalla.
+  "puntaje.config_changed",
+  // Presupuestos: crear, aceptar y emitir el recibo. Lo que se le prometió a un
+  // cliente tiene que poder reconstruirse (quién, cuándo, por cuánto).
+  "presupuesto.created",
+  "presupuesto.accepted",
+  "presupuesto.recibo_issued",
   // Mudar a régua do abandono (spec 16 §5.2) muda como TODO período passa a ser
   // lido — é mutação relevante, não preferência de exibição.
   "metrics.atrito_regua_changed",
