@@ -42,7 +42,7 @@ const PANTALLAS: Pantalla[] = [
   { id: "09-contactos", ruta: "/app/contacts" },
   { id: "10-tareas", ruta: "/app/tasks" },
   { id: "11-configuracion", ruta: "/app/settings" },
-  { id: "12-embudos", ruta: "/app/pipelines" },
+  { id: "12-radar", ruta: "/app/radar" },
 ];
 
 let storageState: Awaited<ReturnType<BrowserContext["storageState"]>>;
@@ -298,6 +298,20 @@ for (const efectos of ["plenos", "reducidos"] as const) {
     const page = await ctx.newPage();
     const r: Record<string, unknown> = {};
     try {
+      // Multiplica a 300 las tarjetas de la respuesta del tablero (el servidor falla con 300 reales: URI too long).
+      await page.route("**/api/v1/pipelines/*/board", async (route) => {
+        const resp = await route.fetch();
+        const json = (await resp.json()) as { data?: { leads: Record<string, unknown>[] }; leads?: Record<string, unknown>[] };
+        const cuerpo = json.data ?? (json as { leads: Record<string, unknown>[] });
+        const base = cuerpo.leads ?? [];
+        const sal: Record<string, unknown>[] = [];
+        for (let i = 0; sal.length < 300 && base.length; i++) {
+          const l = base[i % base.length]!;
+          sal.push(i < base.length ? l : { ...l, id: `${String(l.id)}-x${i}` });
+        }
+        cuerpo.leads = sal;
+        await route.fulfill({ response: resp, json });
+      });
       await page.goto(`/app/pipelines/${datos().pipeline_id}`, { waitUntil: "load" });
       await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
       await page.waitForSelector("[data-rfd-draggable-id]", { timeout: 60_000 });

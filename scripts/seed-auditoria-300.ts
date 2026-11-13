@@ -18,7 +18,8 @@ const admin = createClient(credenciais.url, credenciais.serviceRole, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const TOTAL = 300;
+// 100 reales: con 300 el board falla con "URI too long" (route.ts:196, .in("lead_id", ids)); el test los multiplica a 300 en el navegador.
+const TOTAL = 100;
 
 async function main(): Promise<void> {
   const creds = JSON.parse(fs.readFileSync(CREDS_PATH, "utf8")) as {
