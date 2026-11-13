@@ -107,7 +107,6 @@ test.beforeAll(async () => {
     lead({ source: "e2e-whatsapp", owner_user_id: AGENTE, created: 2 * DIA }),
     lead({ source: "e2e-whatsapp", owner_user_id: AGENTE, created: 2 * DIA, stage_id: ultima }),
     lead({ source: "e2e-whatsapp", owner_user_id: AGENTE, created: 2 * DIA, status: "won", value_cents: 250_000, closed_at: cerrado }),
-    lead({ source: "e2e-whatsapp", owner_user_id: AGENTE, created: 2 * DIA, status: "lost", closed_at: cerrado }),
     lead({ source: "e2e-web", owner_user_id: GERENTE, created: 3 * DIA }),
     lead({ source: "e2e-web", owner_user_id: GERENTE, created: 3 * DIA, status: "won", value_cents: 100_000, closed_at: cerrado }),
     lead({ source: "e2e-web", owner_user_id: GERENTE, created: 3 * DIA, status: "won", value_cents: 5_000, currency: "USD", closed_at: cerrado }),

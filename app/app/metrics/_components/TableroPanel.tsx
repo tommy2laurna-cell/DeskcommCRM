@@ -24,6 +24,18 @@ function seg(s: number | null): string {
   return m < 1 ? `${Math.round(s)}s` : m < 120 ? `${m} min` : `${(m / 60).toFixed(1).replace(".", ",")} h`;
 }
 
+function Num({ href, children, label }: { href: string; children: React.ReactNode; label: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="inline-flex min-h-11 items-center rounded px-1 font-semibold tabular-nums underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"
+    >
+      {children}
+    </Link>
+  );
+}
+
 /** Tablero del dueño. Cada número es un link a la lista que lo produjo (misma ventana y mismo filtro). */
 export function TableroPanel({ verTodo, currentUserId }: { verTodo: boolean; currentUserId: string }) {
   const t = useT();
@@ -42,16 +54,6 @@ export function TableroPanel({ verTodo, currentUserId }: { verTodo: boolean; cur
   const L = (f: Omit<FiltroDeLista, "from" | "to">) => urlDeLista({ ...base, ...f });
   const conv = conversiones(d.etapas);
   const totalNuevos = d.por_origen.reduce((a, o) => a + o.count, 0);
-
-  const Num = ({ href, children, label }: { href: string; children: React.ReactNode; label: string }) => (
-    <Link
-      href={href}
-      aria-label={label}
-      className="inline-flex min-h-11 items-center rounded px-1 font-semibold tabular-nums underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"
-    >
-      {children}
-    </Link>
-  );
 
   return (
     <section aria-label={t("Painel")} data-testid="tablero" className="flex flex-col gap-4">
