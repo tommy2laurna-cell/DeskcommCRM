@@ -64,7 +64,7 @@ test.describe("recetas: recordatorio de turno 24 h", () => {
       webhook_secret_encrypted: "\\x00",
     });
     // La ventana horaria del número abierta todo el día: la prueba no depende de la hora del runner.
-    await insert("channel_knobs", {
+    const knobs = await db.from("channel_knobs").insert({
       organization_id: org,
       channel_session_id: sesion,
       window_start_hour: 0,
@@ -72,6 +72,7 @@ test.describe("recetas: recordatorio de turno 24 h", () => {
       allow_sunday: true,
       timezone: "America/Argentina/Buenos_Aires",
     });
+    if (knobs.error) throw knobs.error;
     const tipo = await insert("calendar_event_types", {
       organization_id: org,
       name: "Consulta",
