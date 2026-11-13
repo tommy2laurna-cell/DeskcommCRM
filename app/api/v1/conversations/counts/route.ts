@@ -60,6 +60,11 @@ export function contagemSoNaoLidas(sp: URLSearchParams): boolean {
   return sp.get("unread") === "true";
 }
 
+/** Verdadeiro quando a contagem deve pedir só as que esperam resposta nossa. */
+export function contagemSoSemResposta(sp: URLSearchParams): boolean {
+  return sp.get("sin_responder") === "true";
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const supabase = await createClient();
@@ -87,6 +92,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const sp = req.nextUrl.searchParams;
   const auxiliares = filtrosAuxiliaresDaContagem(sp);
   const soNaoLidas = contagemSoNaoLidas(sp);
+  const soSemResposta = contagemSoSemResposta(sp);
 
   // ⚠️ TODA contagem nasce daqui, e daqui já sai com `organization_id` E com os
   // filtros auxiliares. Herdar tira a opção de esquecer: não existe o caminho
@@ -98,6 +104,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .eq("organization_id", org);
     for (const [coluna, valor] of auxiliares) q = q.eq(coluna, valor);
     if (soNaoLidas) q = q.gt("unread_count_for_assignee", 0);
+    if (soSemResposta) q = q.eq("sin_responder", true);
     return q;
   };
 

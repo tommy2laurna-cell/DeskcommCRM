@@ -328,6 +328,8 @@ export const listConversationsQuerySchema = z.object({
    * cobrá-lo sozinho — a cerca deriva as chaves deste schema.
    */
   unread: z.coerce.boolean().optional(),
+  /** Escribieron y nadie contestó: columna generada `sin_responder` (migration 0277). Va al BANCO, como `unread`. */
+  sin_responder: z.coerce.boolean().optional(),
   /**
    * O termo de busca. A régua inteira vive em `lib/inbox/termo-de-busca.ts`, e a
    * tela lê a MESMA — repetir aqui faria os dois divergirem, e a divergência

@@ -9,6 +9,8 @@ import { adiarAteAJanelaAbrir } from "@/lib/automation/janela-do-canal";
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import { reportarEnvio, type MensagemEnviada } from "@/lib/automation/desfecho-do-envio";
 import { checarGuardasDeContato } from "@/lib/automation/guarda-do-contato";
+import { estadoDaJanela } from "@/lib/channels/janela";
+import { montarMensajeDeReceta, type MetaTemplateDeRegla } from "@/lib/automation/mensaje-de-receta";
 
 async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): Promise<string | null> {
   const contato = checarGuardasDeContato(ctx);
@@ -49,6 +51,28 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
     const conversationId = boundary.conversation_id;
     await espacarEnvio(sessionId);
     const body = renderTemplate(template, ctx.context);
+
+    // Con `meta_template` la regla sabe salir de la ventana de 24 h: dentro va
+    // texto libre, fuera va la plantilla aprobada. Sin ella, todo sigue como antes.
+    const metaTemplate = (config.meta_template ?? null) as MetaTemplateDeRegla | null;
+    let entrega: ReturnType<typeof montarMensajeDeReceta> = { type: "text", body };
+    if (metaTemplate) {
+      const { data: conv } = await ctx.admin
+        .from("conversations")
+        .select("last_inbound_at, channel_sessions:channel_session_id (provider)")
+        .eq("id", conversationId)
+        .eq("organization_id", ctx.organizationId)
+        .maybeSingle();
+      const sesion = (conv as { channel_sessions?: { provider?: string } | { provider?: string }[] | null } | null)
+        ?.channel_sessions;
+      const provider = Array.isArray(sesion) ? sesion[0]?.provider : sesion?.provider;
+      const ventana = estadoDaJanela(provider, (conv as { last_inbound_at?: string | null } | null)?.last_inbound_at ?? null, new Date());
+      entrega = montarMensajeDeReceta(ventana, body, metaTemplate, ctx.context);
+      if (entrega.type === "skip") {
+        return { type: "send_whatsapp_message", status: "skipped", detail: { reason: entrega.reason } };
+      }
+    }
+
     const message = await sendMessageHandler(
       ctx.admin,
       {
@@ -58,7 +82,7 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
         actor: { type: "webhook_source", id: ctx.ruleId },
         requestId: `rule:${ctx.ruleId}`,
       },
-      { conversation_id: conversationId, type: "text", body } as Parameters<typeof sendMessageHandler>[2],
+      { conversation_id: conversationId, ...entrega } as Parameters<typeof sendMessageHandler>[2],
     );
     // O desfecho vem do ESTADO DA MENSAGEM, nunca da ausência de exceção:
     // `sendMessageHandler` marca `failed`/`queued` e devolve normalmente (ver

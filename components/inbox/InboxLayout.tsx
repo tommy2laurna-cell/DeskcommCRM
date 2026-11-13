@@ -198,6 +198,9 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
       channel_session_id: filterValue.channel_session_id,
       tag: filterValue.tag,
       unread: filterValue.onlyUnread || undefined,
+      sin_responder: filterValue.sinResponder || undefined,
+      // Un atendente puntual solo se pide en la vista Todas; las otras ya fijan el suyo.
+      ...(filterValue.tab === "all" && filterValue.asignado ? { assigned_to: filterValue.asignado } : {}),
     }),
     [
       filterValue.tab,
@@ -206,6 +209,8 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
       filterValue.channel_session_id,
       filterValue.tag,
       filterValue.onlyUnread,
+      filterValue.sinResponder,
+      filterValue.asignado,
     ],
   );
 

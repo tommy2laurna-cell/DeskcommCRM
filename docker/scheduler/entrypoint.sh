@@ -92,6 +92,8 @@ CRONS="
 # no dia errado metade do mundo e de madrugada boa parte do resto. Barato: quem
 # não configurou a automação não chega a ser varrido.
 7 * * * *|60|api/v1/cron/contact-birthdays
+# Reloj de las recetas (turno 24 h/2 h, sin respuesta, quieto, dormido): solo emite eventos.
+*/10 * * * *|60|api/v1/cron/recetas
 0 12 * * *|60|api/v1/cron/lgpd-sla-watcher
 30 3 * * *|120|api/v1/cron/kb-conversations-batch
 15 4 * * *|60|api/v1/cron/sync-model-catalog

@@ -33,6 +33,12 @@ export const ENTIDADE_ESPERADA_POR_GATILHO = {
   // O aniversário nasce do cron `contact-birthdays`, e não de uma ação de
   // alguém: a entidade que ele traz é o próprio contato que faz aniversário.
   "contact.birthday": "contact",
+  // Los cuatro de abajo los emite `cron/recetas` (reloj de las recetas): el motor
+  // no mira el tiempo, solo reacciona a eventos.
+  "appointment.reminder": "calendar_appointment",
+  "contact.silent": "contact",
+  "contact.dormant": "contact",
+  "lead.idle": "crm_lead",
   "appointment.created": "calendar_appointment",
   "appointment.confirmed": "calendar_appointment",
   "appointment.rescheduled": "calendar_appointment",
@@ -54,7 +60,26 @@ export const conditionSchema = z.object({
 
 export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create_or_move_lead"), config: z.object({ pipeline_id: z.string().uuid(), stage_id: z.string().uuid() }) }),
-  z.object({ type: z.literal("send_whatsapp_message"), config: z.object({ channel_session_id: z.string().uuid(), template: z.string().min(1).max(2000) }) }),
+  z.object({
+    type: z.literal("send_whatsapp_message"),
+    config: z.object({
+      channel_session_id: z.string().uuid(),
+      template: z.string().min(1).max(2000),
+      /**
+       * Plantilla aprobada de Meta para cuando la ventana de 24 h está cerrada.
+       * `values` mapea cada {{n}} de la plantilla a un texto con variables de la regla.
+       * Sin esto, fuera de la ventana el mensaje no sale (queda como hasta ahora).
+       */
+      meta_template: z
+        .object({
+          name: z.string().min(1).max(512),
+          language: z.string().min(2).max(20),
+          values: z.record(z.string().max(60), z.string().max(1000)),
+        })
+        .optional(),
+    }),
+  }),
+  z.object({ type: z.literal("notify_owner"), config: z.object({ title: z.string().min(1).max(200) }) }),
   z.object({ type: z.literal("add_tag"), config: z.object({ tags: z.array(z.string().min(1).max(60)).min(1).max(10) }) }),
   z.object({ type: z.literal("assign_owner"), config: z.object({ user_id: z.string().uuid() }) }),
   z.object({
