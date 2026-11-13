@@ -5,7 +5,7 @@
  * best-effort (payload forjado é possível) e o WAHA anuncia seu endereço
  * INTERNO (ex.: localhost:3000 dentro do container, mapeado p/ 3030 no
  * host). Por isso o fetch é SEMPRE reconstruído sobre WAHA_API_BASE_URL,
- * aproveitando apenas path+query da URL anunciada — SSRF impossível por
+ * aproveitando apenas o path (`/api/files/...`, sem query) da URL anunciada — SSRF impossível por
  * construção (o host nunca vem do payload). A futura MetaMediaSource
  * implementa a mesma assinatura baixando via media_id + Graph API.
  */
@@ -17,6 +17,15 @@ import {
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+/**
+ * Lo único que WAHA anuncia para media: `/api/files/<archivo>` o
+ * `/api/files/<sesión>/<archivo>`. Sin query y sin `..`. `media_url` lo escribe
+ * el cliente (PostgREST, POST /api/v1/messages, webhook forjado) y acá viaja la
+ * X-Api-Key global: cualquier otra ruta de la API de WAHA (sesiones, chats,
+ * screenshot) quedaría legible para cualquier miembro (C2).
+ */
+const RUTA_DE_MEDIA = /^\/api\/files\/(?:[\w-]+(?:\.[\w-]+)*\/)?[\w-]+(?:\.[\w-]+)*$/;
+
 export async function fetchWahaMedia(
   mediaUrl: string,
   hintMime?: string | null,
@@ -26,8 +35,12 @@ export async function fetchWahaMedia(
   try {
     const advertised = new URL(mediaUrl);
     // Host/porta descartados: só path+query sobrevivem, resolvidos na base.
-    url = new URL(advertised.pathname + advertised.search, base ?? "");
-  } catch {
+    if (advertised.search || !RUTA_DE_MEDIA.test(advertised.pathname)) {
+      throw new Error("waha_media_untrusted_path");
+    }
+    url = new URL(advertised.pathname, base ?? "");
+  } catch (e) {
+    if (e instanceof Error && e.message === "waha_media_untrusted_path") throw e;
     throw new Error("waha_media_untrusted_host");
   }
 
