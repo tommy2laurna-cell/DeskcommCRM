@@ -6,6 +6,7 @@
  * sigue la convención del cron `contact-birthdays`: en año no bisiesto responde el 28.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 const esBisiesto = (a: number) => (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0;
 
@@ -46,7 +47,7 @@ export async function cumpleanosDeLaSemana(
   return (data ?? [])
     .map((c) => ({
       id: c.id as string,
-      nombre: (c.name || c.display_name || c.phone_number || "") as string,
+      nombre: rotuloDoContato(c),
       birthday_md: c.birthday_md as number,
     }))
     .sort((a, b) => a.birthday_md - b.birthday_md);

@@ -188,8 +188,8 @@ export const NAV_CATALOG = [
     label: "Listas inteligentes",
     description: "Grupos de contatos que se atualizam sozinhos, por etiqueta, etapa, origem ou aniversário.",
     icon: "Users",
-    group: "crm",
-    section: "O dia a dia da venda",
+    group: "analise",
+    section: "Os números do período",
     minRole: "manager",
   },
   {
@@ -198,8 +198,8 @@ export const NAV_CATALOG = [
     label: "Campanhas",
     description: "Envie uma mensagem aprovada da Meta a uma lista, com prévia, custo e botão de saída.",
     icon: "Flag",
-    group: "crm",
-    section: "O dia a dia da venda",
+    group: "analise",
+    section: "Os números do período",
     minRole: "manager",
   },
   {

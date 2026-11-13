@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
@@ -150,7 +151,7 @@ export function CampanasClient({ isAdmin }: { isAdmin: boolean }) {
             <select id="camp-sesion" className="w-full rounded-md border p-2" value={sesion} onChange={(e) => setSesion(e.target.value)} required>
               <option value="" />
               {op?.sesiones.map((s) => (
-                <option key={s.id} value={s.id}>{s.display_name ?? s.phone_number ?? s.id}</option>
+                <option key={s.id} value={s.id}>{rotuloDoContato({ display_name: s.display_name, phone_number: s.phone_number })}</option>
               ))}
             </select>
           </div>
@@ -229,7 +230,7 @@ export function CampanasClient({ isAdmin }: { isAdmin: boolean }) {
             </div>
             {vista?.id === c.id && (
               <div className="mt-3 flex flex-col gap-2 text-sm" data-testid="campana-previa">
-                <pre className="whitespace-pre-wrap rounded bg-muted p-2">{vista.v.mensaje.texto}</pre>
+                <pre className="whitespace-pre-wrap rounded-md bg-muted p-2">{vista.v.mensaje.texto}</pre>
                 <p>
                   {t("Destinatários efetivos")}: {vista.v.destinatarios.efectivos} / {vista.v.destinatarios.total} ·{" "}
                   {t("Excluídos por saída")}: {vista.v.destinatarios.excluidos_optout} ·{" "}

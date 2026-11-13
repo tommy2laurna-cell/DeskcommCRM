@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -48,7 +49,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   return ok(
     {
       referred_by: ref
-        ? { id: ref.id, nombre: ref.name || ref.display_name || ref.phone_number || "" }
+        ? { id: ref.id, nombre: rotuloDoContato(ref) }
         : null,
     },
     { requestId },

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
@@ -151,7 +152,7 @@ export function ListasClient() {
                 )}
                 <ul className="list-disc pl-5">
                   {aberta.contatos.map((c) => (
-                    <li key={c.id}>{c.display_name ?? c.name ?? c.phone_number}</li>
+                    <li key={c.id}>{rotuloDoContato(c)}</li>
                   ))}
                 </ul>
               </div>

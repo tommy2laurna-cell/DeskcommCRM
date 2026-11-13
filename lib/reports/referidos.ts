@@ -4,6 +4,7 @@
  * `organization_id` (la RLS no alcanza con service role).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 export interface FilaDeReferidos {
   contact_id: string;
@@ -70,7 +71,7 @@ export async function cargarReferidos(
       .eq("organization_id", organizationId)
       .in("id", referentes.slice(i, i + LOTE));
     for (const c of data ?? []) {
-      nombres.set(c.id as string, (c.name || c.display_name || c.phone_number || "") as string);
+      nombres.set(c.id as string, rotuloDoContato(c));
     }
   }
   return {

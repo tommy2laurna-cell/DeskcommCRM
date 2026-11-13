@@ -4,6 +4,7 @@
  * como dormido: no hay desde cuándo medir.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 export const DIAS_DORMIDO_PADRAO = 60;
 
@@ -36,7 +37,7 @@ export async function contactosDormidos(
   if (error) throw new Error(error.message);
   return (data ?? []).map((c) => ({
     id: c.id as string,
-    nombre: (c.name || c.display_name || c.phone_number || "") as string,
+    nombre: rotuloDoContato(c),
     last_activity_at: c.last_activity_at as string,
   }));
 }

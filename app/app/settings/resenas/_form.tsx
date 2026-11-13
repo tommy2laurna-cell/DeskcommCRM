@@ -36,7 +36,7 @@ export function ResenasForm({ initial }: { initial: ReviewsSettings }) {
           <Input
             id="google_review_url"
             type="url"
-            placeholder="https://g.page/r/..."
+            placeholder="https://..."
             value={form.google_review_url}
             disabled={isPending}
             onChange={(e) => setForm((f) => ({ ...f, google_review_url: e.target.value }))}
