@@ -451,6 +451,15 @@ export const NAV_CATALOG = [
     // navegável. Para voltar a mostrá-la, basta devolver `sidebar: true`.
   },
   {
+    href: "/app/captar",
+    label: "Captar",
+    description: "Formulários, pesquisas e códigos QR para trazer contatos de fora do WhatsApp.",
+    icon: "QrCode",
+    group: "canais",
+    minRole: "manager",
+    sidebar: true,
+  },
+  {
     href: "/app/webhooks",
     label: "Webhooks",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",
