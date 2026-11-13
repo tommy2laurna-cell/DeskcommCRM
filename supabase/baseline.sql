@@ -27202,6 +27202,11 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
+-- ---- user_recovery_codes só com service role (migration 0277) ----
+-- Auditoria 2026-11-13, H1: com GRANT ALL a authenticated, uma sessão aal1 inseria
+-- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.
+revoke all on table public.user_recovery_codes from anon, authenticated;
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna
