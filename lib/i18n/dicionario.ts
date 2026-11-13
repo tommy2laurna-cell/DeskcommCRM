@@ -9183,6 +9183,21 @@ export const DICIONARIO: Traducoes = {
   "o compromisso": { es: "la cita" },
   "Entendi": { es: "Entendido" },
   "e-mail do convidado inválido": { es: "correo del invitado no válido" },
+  // GC5 — tablero del dueño (voseo rioplatense).
+  "Painel": { es: "Tablero" },
+  "Novos prospectos": { es: "Prospectos nuevos" },
+  "Ver novos prospectos": { es: "Ver prospectos nuevos" },
+  "Vendas ganhas": { es: "Ventas ganadas" },
+  "Ver vendas ganhas": { es: "Ver ventas ganadas" },
+  "Vendas perdidas": { es: "Ventas perdidas" },
+  "em outra moeda, fora do valor": { es: "en otra moneda, fuera del monto" },
+  "Novos prospectos por origem": { es: "Prospectos nuevos por origen" },
+  "Conversão entre etapas": { es: "Conversión entre etapas" },
+  "Por usuário": { es: "Por usuario" },
+  "Novos": { es: "Nuevos" },
+  "Vendido (ARS)": { es: "Vendido (ARS)" },
+  "Filtro inválido.": { es: "Filtro inválido." },
+  "Sem atividade no período.": { es: "Sin actividad en el período." },
 };
 
 /**

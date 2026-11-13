@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { useAttendantMetrics, type AttendantMetric } from "@/hooks/metrics/useAttendantMetrics";
 import { AtritoPanel } from "./AtritoPanel";
+import { TableroPanel } from "./TableroPanel";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -82,6 +83,8 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
           </Select>
         </div>
       ) : null}
+
+      <TableroPanel verTodo={canCompare} currentUserId={currentUserId} />
 
       {/* Acima do funil e da performance de propósito: é o número do sistema
           inteiro, ao qual as métricas de área se subordinam (doutrina §3.6).
