@@ -295,6 +295,8 @@ test.describe("celular 390 px", () => {
 
     // 1. Bandeja: la lista ocupa toda la pantalla.
     await page.goto("/app/inbox");
+    // La conversación está asignada al vendedor: vive en «Minhas / Mías».
+    await page.getByRole("tab", { name: /Minhas|Mías|Mis /i }).click();
     const item = page.getByText(`Tablero`).first();
     await expect(item).toBeVisible({ timeout: 30_000 });
     await sinScrollLateral();
