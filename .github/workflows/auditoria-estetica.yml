@@ -1,0 +1,104 @@
+name: auditoria-estetica
+
+# Auditoría estética del Conectado (LIQUID-UI.md) con tres marcas de prueba:
+# capturas, checklist medido, contraste (axe), modos reducidos y kanban con 300 tarjetas
+# (cuadros por segundo + traza de Chrome). Solo mide: no cambia código del producto.
+# Un artefacto por marca: auditoria-<id>.
+
+on:
+  push:
+    branches: [audit/estetica]
+    paths:
+      - ".github/workflows/auditoria-estetica.yml"
+      - "tests/e2e/auditoria-estetica.spec.ts"
+      - "scripts/seed-auditoria-300.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auditoria:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: amarillo
+            hex: "#F5D90A"
+          - id: azul
+            hex: "#0B1F4B"
+          - id: bordo
+            hex: "#710014"
+    env:
+      E2E_PORT: "3001"
+      APP_ACCENT_HEX: ${{ matrix.hex }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          IDS=$(docker ps -q --filter name=supabase_realtime)
+          [ -n "$IDS" ] && docker restart $IDS >/dev/null || true
+          sleep 10
+
+      - name: .env.e2e y build contra el Supabase local
+        run: |
+          pnpm e2e:env
+          cp .env.e2e .env.local
+          pnpm e2e:build
+
+      - name: Semillas
+        run: |
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+          pnpm exec tsx scripts/seed-e2e-kanban.ts
+          pnpm exec tsx scripts/seed-liquid-capturas.ts
+          pnpm exec tsx scripts/seed-auditoria-300.ts
+
+      - name: Instalar Playwright (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Auditoría
+        run: pnpm exec playwright test tests/e2e/auditoria-estetica.spec.ts
+
+      - name: Subir resultados
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: auditoria-${{ matrix.id }}
+          path: |
+            auditoria-out/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo "### auditoria-${{ matrix.id }} (${{ matrix.hex }})" >> "$GITHUB_STEP_SUMMARY"
+          [ -f auditoria-out/rendimiento.json ] && { echo '```json'; cat auditoria-out/rendimiento.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || echo "sin rendimiento" >> "$GITHUB_STEP_SUMMARY"
