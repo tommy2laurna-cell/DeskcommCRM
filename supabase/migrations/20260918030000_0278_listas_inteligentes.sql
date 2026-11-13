@@ -107,4 +107,7 @@ $$;
 revoke execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) from public, anon;
 grant execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) to authenticated, service_role;
 
+-- Las travas del modo somente leitura del suporte cubren la tabla nueva (migración 0274).
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
 notify pgrst, 'reload schema';

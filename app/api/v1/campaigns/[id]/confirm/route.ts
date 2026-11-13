@@ -94,6 +94,14 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
   let total = 0;
   let excluidos = 0;
   try {
+    // Un intento abortado antes pudo dejar destinatarios de una lista que ya cambió:
+    // se rehacen desde cero (la campaña sigue en borrador, nada se envió todavía).
+    const { error: errLimpiar } = await admin
+      .from("campaign_recipients")
+      .delete()
+      .eq("campaign_id", id)
+      .eq("organization_id", org.orgId);
+    if (errLimpiar) throw new Error(errLimpiar.message);
     await recorrerLista(admin, org.orgId, filtros.data, async (contactos) => {
       const filas = contactos.map((ct) => {
         const v = clasificarContacto(ct);
@@ -119,7 +127,8 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     return fail("internal_error", "Erro ao confirmar.", 500, { requestId });
   }
 
-  const { data: confirmada } = await db
+  // Transición de estado: la hace el servidor (admin); la RLS solo deja escribir borradores.
+  const { data: confirmada } = await admin
     .from("campaigns")
     .update({
       status: "confirmada",

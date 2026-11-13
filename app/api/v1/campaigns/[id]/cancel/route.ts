@@ -9,9 +9,10 @@ import { type NextRequest } from "next/server";
 import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { clienteDeUsuario } from "@/lib/campaigns/http";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,8 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
   const t = (texto: string) => traduzir(texto, user.idioma);
   const { id } = await params;
 
-  const db = await clienteDeUsuario();
+  // Transición de estado: la hace el servidor; el rol manager ya lo exigió requireRole.
+  const db = createAdminClient() as unknown as SupabaseClient;
   const { data } = await db
     .from("campaigns")
     .update({ status: "cancelada" })

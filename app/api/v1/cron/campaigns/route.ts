@@ -48,7 +48,8 @@ async function handle(req: NextRequest): Promise<Response> {
     )
     .in("status", ["confirmada", "enviando"])
     .or(`scheduled_at.is.null,scheduled_at.lte.${ahora}`)
-    .order("confirmed_at", { ascending: true })
+    // Rotación justa: cada lote toca `updated_at`, así la campaña atendida pasa al final.
+    .order("updated_at", { ascending: true })
     .limit(MAX_CAMPANAS_POR_TICK);
   if (error) {
     logger.error("[campaigns] consulta falhou", { error: error.message, requestId });
@@ -73,7 +74,15 @@ async function handle(req: NextRequest): Promise<Response> {
       : { data: null };
     const s = sesion as { provider: string; meta_phone_number_id: string | null } | null;
     if (!c.channel_session_id || !s || s.provider !== "meta_cloud" || !s.meta_phone_number_id) {
-      total.saltadas_no_meta += 1; // jamás por WAHA
+      // Jamás por WAHA. Dejarla `confirmada` ocuparía uno de los cupos del tick para
+      // siempre: se cancela con el motivo a la vista.
+      await admin
+        .from("campaigns")
+        .update({ status: "cancelada", status_reason: "sesion_no_meta" })
+        .eq("id", c.id)
+        .eq("organization_id", c.organization_id)
+        .in("status", ["confirmada", "enviando"]);
+      total.saltadas_no_meta += 1;
       continue;
     }
 
@@ -96,7 +105,7 @@ async function handle(req: NextRequest): Promise<Response> {
     }
   }
 
-  if (total.enviados + total.excluidos + total.errores > 0) {
+  if (total.enviados + total.excluidos + total.errores + total.saltadas_no_meta > 0) {
     await audit({
       action: "campaign.batch_sent",
       resourceType: "campaign",

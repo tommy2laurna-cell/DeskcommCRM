@@ -42,7 +42,7 @@ import { audit } from "@/lib/audit";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
 import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
-import { ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
+import { ehBajaInequivoca, ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
 import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { casarCampanha, lerCampanhas } from "@/lib/ai/elegibilidade/campanha";
@@ -92,6 +92,11 @@ export interface EntradaDeMensagem {
   channelSessionId: string;
   /** O texto que o cliente escreveu — é onde se procura o pedido de saída. */
   texto: string | null;
+  /**
+   * El texto es el de un botón de respuesta rápida. Por botón solo cuentan las frases
+   * inequívocas de baja: «Cancelar» en el botón de un recordatorio no bloquea a nadie.
+   */
+  viaBotao?: boolean;
   /** Nome exibido pelo canal, quando houver. Serve para batizar o card novo. */
   nomeDoContato: string | null;
   /** Correlaciona a linha de auditoria com a request que a originou. */
@@ -201,7 +206,10 @@ async function avaliarCampanha(admin: Admin, entrada: EntradaDeMensagem): Promis
  * é justamente o que prova, depois, que o pedido chegou e foi respeitado.
  */
 async function aplicarOptOut(admin: Admin, entrada: EntradaDeMensagem): Promise<void> {
-  if (!ehPedidoDeOptOut(entrada.texto)) return;
+  const pidioSalir = entrada.viaBotao
+    ? ehBajaInequivoca(entrada.texto)
+    : ehPedidoDeOptOut(entrada.texto);
+  if (!pidioSalir) return;
 
   try {
     const agora = new Date().toISOString();

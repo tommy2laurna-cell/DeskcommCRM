@@ -92,6 +92,10 @@ describe("tieneBotonDeBaja", () => {
   it("exige un QUICK_REPLY cuyo texto sea un pedido de baja", () => {
     expect(tieneBotonDeBaja(con("Baja"))).toBe(true);
     expect(tieneBotonDeBaja(con("STOP"))).toBe(true);
+    expect(tieneBotonDeBaja(con("Dar de baja"))).toBe(true);
+    // Los verbos genéricos no son una baja inequívoca por botón.
+    expect(tieneBotonDeBaja(con("Cancelar"))).toBe(false);
+    expect(tieneBotonDeBaja(con("Parar"))).toBe(false);
     expect(tieneBotonDeBaja(con("Quiero info"))).toBe(false);
     expect(tieneBotonDeBaja(con("Baja", "URL"))).toBe(false);
     expect(tieneBotonDeBaja([{ type: "BODY", text: "Hola" }])).toBe(false);
@@ -107,7 +111,7 @@ function baseFalsa(
   const tablas: Record<string, Record<string, unknown>[]> = {
     campaign_recipients: recipients,
     contacts,
-    campaigns: [{ id: "camp" }],
+    campaigns: [{ id: "camp", organization_id: "org", status: "enviando" }],
   };
   const from = (tabla: string) => {
     const filtros: ((r: Record<string, unknown>) => boolean)[] = [];
@@ -152,7 +156,7 @@ function baseFalsa(
     };
     return q;
   };
-  return { admin: { from } as never, recipients, contacts };
+  return { admin: { from } as never, recipients, contacts, campanas: tablas.campaigns! };
 }
 
 const CAMPANA: CampanaEnCurso = {
@@ -255,6 +259,22 @@ describe("procesarLote", () => {
     for (let i = 0; i < 5; i++) await procesarLote(admin, CAMPANA, d);
     expect(enviar).toHaveBeenCalledTimes(3);
     expect(recipients[0]).toMatchObject({ status: "error", attempts: 3 });
+  });
+
+  it("cancelar en pleno lote frena los envíos que faltan y no se pisa el estado", async () => {
+    const { admin, recipients, campanas } = baseFalsa(
+      [fila("r1", "1"), fila("r2", "2")],
+      [contacto("1"), contacto("2")],
+    );
+    const enviar = vi.fn(async ({ para }: { para: string }) => {
+      campanas[0]!.status = "cancelada"; // alguien cancela durante el primer envío
+      return `sim:${para}`;
+    });
+    const r = await procesarLote(admin, CAMPANA, deps({ enviar }).d);
+    expect(enviar).toHaveBeenCalledTimes(1);
+    expect(r.cortado).toBe("cancelada");
+    expect(campanas[0]!.status).toBe("cancelada");
+    expect(recipients.find((x) => x.id === "r2")).toMatchObject({ status: "pendiente" });
   });
 
   it("un fallo de la campaña entera (plantilla no aprobada) corta el lote", async () => {

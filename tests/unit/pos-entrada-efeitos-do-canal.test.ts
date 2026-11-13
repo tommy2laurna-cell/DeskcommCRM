@@ -196,6 +196,22 @@ describe("opt-out", () => {
     });
   });
 
+  it.each(["Cancelar", "Parar", "Sair", "Remover"])(
+    "o toque no botão «%s» (ex.: de um recordatório de turno) NÃO bloqueia o contato",
+    async (texto) => {
+      await rodar({ texto, viaBotao: true });
+      expect(sequencia, `bloqueou o botão "${texto}"`).not.toContain("update:contacts");
+    },
+  );
+
+  it.each(["Dar de baja", "Baja", "STOP", "No quiero recibir más"])(
+    "o toque no botão de baja «%s» bloqueia o contato",
+    async (texto) => {
+      await rodar({ texto, viaBotao: true });
+      expect(ultimoUpdate).toMatchObject({ is_blocked: true, blocked_reason: "stop_keyword" });
+    },
+  );
+
   it("mensagem sem texto não bloqueia ninguém", async () => {
     await rodar({ texto: null });
     expect(sequencia).not.toContain("update:contacts");

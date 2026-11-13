@@ -159,8 +159,22 @@ jobs:
         with:
           version: latest
 
-      - name: Supabase local (aplica supabase/migrations)
-        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit
+      # Receita de .agents/skills/deskcomm-contribuir/references/receita-e2e-local.md:
+      # a cadeia de migrations NÃO sobe do zero; o baseline.sql (a fonte do kit) sim.
+      #
+      # `[inbucket]` -> `[local_smtp]`: o CLI atual recusa a seção antiga. A troca é só
+      # no checkout do job (config.toml versionado fica intacto: um CLI antigo local
+      # ainda o lê) — mais seguro que fixar uma versão velha do CLI, que o `setup-cli`
+      # nem garante manter disponível. NO MEDIDO: a chave `port` de `[local_smtp]` é
+      # suposta igual à de `[inbucket]`.
+      - name: Supabase local + baseline.sql
+        run: |
+          sed -i 's/^\[inbucket\]/[local_smtp]/' supabase/config.toml
+          mv supabase/migrations /tmp/migrations-off && mkdir -p supabase/migrations
+          supabase start
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          docker restart $(docker ps -q --filter name=supabase_realtime)
+          mv /tmp/migrations-off/* supabase/migrations/ && rmdir /tmp/migrations-off
 
       - name: Ambiente e2e y build
         run: |

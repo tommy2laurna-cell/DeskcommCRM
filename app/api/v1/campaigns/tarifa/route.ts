@@ -17,6 +17,7 @@ import { FUENTE_OFICIAL_DE_TARIFAS, leerTarifa, tarifaSchema } from "@/lib/campa
 import { clienteDeUsuario } from "@/lib/campaigns/http";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +55,13 @@ export async function PUT(req: NextRequest): Promise<Response> {
     });
   }
 
-  const db = await clienteDeUsuario();
-  const { error } = await db.rpc("fn_set_campaign_tarifa", {
+  // Solo service_role ejecuta la función; el admin ya lo exigió requireRole arriba y
+  // `org.orgId` sale de la sesión, nunca del body.
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("fn_set_campaign_tarifa" as never, {
     p_org: org.orgId,
     p_tarifa: parsed.data.tarifa,
-  });
+  } as never);
   if (error) return fail("internal_error", "Erro ao guardar a tarifa.", 500, { requestId });
 
   void audit({

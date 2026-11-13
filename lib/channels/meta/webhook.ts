@@ -113,6 +113,8 @@ export interface InboundMessageEvent {
   /** `text` | `audio` | `image` | `video` | `document` | `sticker` | `contact` | … */
   type: string;
   text: string | null;
+  /** `true` cuando el texto es el de un botón de respuesta rápida, no algo que la persona escribió. */
+  fromButton?: boolean;
   /** Preenchido quando `type === "contact"` (cartão compartilhado). */
   sharedContact?: SharedContact | null;
   media: {
@@ -231,6 +233,7 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
             // A Meta manda epoch em SEGUNDOS, string. Passar direto ao Date daria 1970.
             sentAt: new Date(Number(str(raw.timestamp) ?? "0") * 1000),
             type: tipoCrm,
+            ...(textoDeBoton ? { fromButton: true } : {}),
             text:
               tipoCrm === "text"
                 ? (textoDeBoton ?? str((raw.text as Record<string, unknown>)?.body))

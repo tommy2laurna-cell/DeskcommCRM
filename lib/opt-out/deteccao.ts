@@ -306,6 +306,25 @@ const FRASES_AMBIGUAS_DE_OPT_OUT: readonly RegExp[] = [
   /\bno\s+me\s+molest(?:e|en|es)\b/u,
 ];
 
+/**
+ * Pedido de baja INEQUÍVOCO, para texto que NO escribió la persona: el toque en un
+ * botón de respuesta rápida. Un botón «Cancelar» de un recordatorio de turno o un
+ * «Parar» de otro flujo no es una baja: por botón solo valen estas frases, sin los
+ * verbos genéricos de `PALAVRAS_DE_OPT_OUT`. El botón de baja de las campañas
+ * (`lib/campaigns/boton-de-baja.ts`) se valida contra esta misma función.
+ */
+const BAJA_POR_BOTON =
+  /^(?:(?:quiero\s+)?(?:darme|dar)\s+de\s+baja|baja|stop|unsubscribe|no\s+quiero\s+recibir(?:\s+mas)?(?:\s+(?:mensajes|promociones|comunicaciones))?)$/u;
+
+export function ehBajaInequivoca(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  const limpio = normalizarTexto(texto.trim())
+    .replace(/[^a-z\s]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return BAJA_POR_BOTON.test(limpio);
+}
+
 /** A mensagem inteira é a palavra-chave (ignorando pontuação e emoji de borda). */
 function ehPalavraIsolada(normalizado: string): boolean {
   const somenteLetras = normalizado.replace(/[^a-z]/gu, "");

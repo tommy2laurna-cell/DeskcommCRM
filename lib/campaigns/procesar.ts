@@ -54,7 +54,7 @@ export interface ResultadoDeLote {
   excluidos: number;
   errores: number;
   /** El lote se cortó antes de tiempo (tope diario o fallo de la campaña entera). */
-  cortado: "tope_diario" | "fallo_de_campana" | null;
+  cortado: "tope_diario" | "fallo_de_campana" | "cancelada" | null;
   completada: boolean;
 }
 
@@ -127,8 +127,25 @@ export async function procesarLote(
       .eq("id", id)
       .eq("organization_id", campana.organization_id);
 
+  /** ¿Sigue activa? Se relee ANTES de cada envío: cancelar en pleno lote frena el resto. */
+  const sigueActiva = async (): Promise<boolean> => {
+    const { data } = await admin
+      .from("campaigns")
+      .select("status")
+      .eq("id", campana.id)
+      .eq("organization_id", campana.organization_id)
+      .maybeSingle();
+    const st = (data as { status?: string } | null)?.status;
+    return st === "confirmada" || st === "enviando";
+  };
+
   for (let i = 0; i < tomadas.length; i++) {
     const fila = tomadas[i]!;
+    if (!(await sigueActiva())) {
+      for (const resto of tomadas.slice(i)) await cerrar(resto.id, { attempts: resto.attempts });
+      res.cortado = "cancelada";
+      break;
+    }
     const contacto = contactos.get(fila.contact_id);
     const v = clasificarContacto(
       contacto
@@ -217,6 +234,8 @@ async function actualizarTotales(
       status: completada ? "completada" : "enviando",
     })
     .eq("id", campana.id)
-    .eq("organization_id", campana.organization_id);
+    .eq("organization_id", campana.organization_id)
+    // Sin esta condición, un `cancelada` puesto en pleno envío sería pisado.
+    .in("status", ["confirmada", "enviando"]);
   return completada;
 }

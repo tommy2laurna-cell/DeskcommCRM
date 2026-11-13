@@ -31,6 +31,7 @@ create table if not exists public.campaigns (
   template_values jsonb not null default '{}'::jsonb check (jsonb_typeof(template_values) = 'object'),
   status text not null default 'borrador'
     check (status in ('borrador', 'confirmada', 'enviando', 'completada', 'cancelada')),
+  status_reason text,
   scheduled_at timestamptz,
   confirmed_at timestamptz,
   confirmed_by_user_id uuid references auth.users(id) on delete set null,
@@ -42,6 +43,8 @@ create table if not exists public.campaigns (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.campaigns add column if not exists status_reason text;
 
 create index if not exists campaigns_org_status_idx
   on public.campaigns (organization_id, status);
@@ -82,16 +85,22 @@ create policy campaigns_select on public.campaigns
     or public.fn_is_platform_admin()
   );
 
+-- Escritura de `authenticated` SOLO sobre borradores (using Y with check): confirmar,
+-- enviar, completar y cancelar son transiciones del servidor (cliente admin), así un
+-- manager no puede, vía PostgREST, reabrir una campaña ni saltarse el botón de baja
+-- que la confirmación verifica.
 create policy campaigns_manager_write on public.campaigns
   using (
-    public.fn_is_platform_admin()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'manager'))
+    (public.fn_is_platform_admin()
+     or ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'manager')))
+    and status = 'borrador'
   )
   with check (
-    public.fn_is_platform_admin()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'manager'))
+    (public.fn_is_platform_admin()
+     or ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'manager')))
+    and status = 'borrador'
   );
 
 -- Los destinatarios los escribe SOLO el servidor (service_role, que ignora RLS).
@@ -115,16 +124,16 @@ create trigger trg_campaign_recipients_set_updated_at
   before update on public.campaign_recipients
   for each row execute function public.fn_set_updated_at();
 
--- Tarifa vigente de Meta, editable por admin. `p_tarifa` null = borrarla.
+-- Tarifa vigente de Meta. `p_tarifa` null = borrarla. Solo la ejecuta el servidor
+-- (service_role): la ruta PUT /api/v1/campaigns/tarifa exige admin con
+-- `requireRole` antes de llamarla. `authenticated` NO la ejecuta: una definer que
+-- escribe, con el org por argumento, sería escritura cross-tenant directa.
 create or replace function public.fn_set_campaign_tarifa(p_org uuid, p_tarifa jsonb)
 returns void
 language plpgsql security definer
 set search_path = public
 as $$
 begin
-  if not public.fn_role_at_least(p_org, 'admin') then
-    raise exception 'forbidden' using errcode = '42501';
-  end if;
   update public.organizations
      set settings = jsonb_set(
            coalesce(settings, '{}'::jsonb),
@@ -137,7 +146,10 @@ begin
 end;
 $$;
 
-revoke execute on function public.fn_set_campaign_tarifa(uuid, jsonb) from public, anon;
-grant execute on function public.fn_set_campaign_tarifa(uuid, jsonb) to authenticated, service_role;
+revoke execute on function public.fn_set_campaign_tarifa(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.fn_set_campaign_tarifa(uuid, jsonb) to service_role;
+
+-- Las travas del modo somente leitura del suporte cubren la tabla nueva (migración 0274).
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
 
 notify pgrst, 'reload schema';
