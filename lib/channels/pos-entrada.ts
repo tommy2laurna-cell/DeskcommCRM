@@ -42,7 +42,7 @@ import { audit } from "@/lib/audit";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
 import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
-import { ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
+import { ehBajaInequivoca, ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
 import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { casarCampanha, lerCampanhas } from "@/lib/ai/elegibilidade/campanha";
@@ -92,6 +92,11 @@ export interface EntradaDeMensagem {
   channelSessionId: string;
   /** O texto que o cliente escreveu — é onde se procura o pedido de saída. */
   texto: string | null;
+  /**
+   * El texto es el de un botón de respuesta rápida. Por botón solo cuentan las frases
+   * inequívocas de baja: «Cancelar» en el botón de un recordatorio no bloquea a nadie.
+   */
+  viaBotao?: boolean;
   /** Nome exibido pelo canal, quando houver. Serve para batizar o card novo. */
   nomeDoContato: string | null;
   /** Correlaciona a linha de auditoria com a request que a originou. */
@@ -201,7 +206,10 @@ async function avaliarCampanha(admin: Admin, entrada: EntradaDeMensagem): Promis
  * é justamente o que prova, depois, que o pedido chegou e foi respeitado.
  */
 async function aplicarOptOut(admin: Admin, entrada: EntradaDeMensagem): Promise<void> {
-  if (!ehPedidoDeOptOut(entrada.texto)) return;
+  const pidioSalir = entrada.viaBotao
+    ? ehBajaInequivoca(entrada.texto)
+    : ehPedidoDeOptOut(entrada.texto);
+  if (!pidioSalir) return;
 
   try {
     const agora = new Date().toISOString();
@@ -222,6 +230,38 @@ async function aplicarOptOut(admin: Admin, entrada: EntradaDeMensagem): Promise<
         detail: error.message.slice(0, 160),
       });
       return;
+    }
+
+    // Además del bloqueo, deja la baja registrada en el consentimiento
+    // (`consent.marketing.declined_at`): es la clave que lee la guarda de las
+    // campañas y la que explica el POR QUÉ en el dossier. El bloqueo de arriba ya
+    // frena el envío; si este paso falla, solo se pierde el registro.
+    try {
+      const { data: actual } = await admin
+        .from("contacts")
+        .select("consent")
+        .eq("organization_id", entrada.organizationId)
+        .eq("id", entrada.contactId)
+        .maybeSingle();
+      const consent = ((actual as { consent?: unknown } | null)?.consent ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const marketing = (consent.marketing ?? {}) as Record<string, unknown>;
+      if (!marketing.declined_at) {
+        const { error: erroConsent } = await admin
+          .from("contacts")
+          .update({ consent: { ...consent, marketing: { ...marketing, declined_at: agora } } })
+          .eq("organization_id", entrada.organizationId)
+          .eq("id", entrada.contactId);
+        if (erroConsent) throw new Error(erroConsent.message);
+      }
+    } catch (err) {
+      logger.warn("pos-entrada: declined_at NAO gravado (o bloqueio sim)", {
+        organization_id: entrada.organizationId,
+        contact_id: entrada.contactId,
+        detail: err instanceof Error ? err.message.slice(0, 160) : "desconhecido",
+      });
     }
 
     await audit({

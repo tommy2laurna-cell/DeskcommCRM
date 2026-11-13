@@ -829,6 +829,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint da Graph API do WhatsApp Cloud — 6 arquivos: envio de template, sincronização de modelos, validação de credencial, conversões e insights. É contrato da Meta, não escolha nossa.",
   },
+  "developers.facebook.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "documentação oficial das tarifas da Meta, citada como FONTE na tela de campanhas (`lib/campaigns/costo.ts`): o custo estimado só aparece com a tarifa que o admin carrega, e a tela diz de onde tirá-la. É um link de leitura, não um destino de chamada.",
+  },
   "www.googleapis.com": {
     categoria: "FORNECEDOR",
     motivo:

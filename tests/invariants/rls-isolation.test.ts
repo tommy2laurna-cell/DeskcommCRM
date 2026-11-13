@@ -254,6 +254,34 @@ beforeAll(() => {
             values (v_org, false);
         end if;
 
+        -- review_requests (0277), smart_lists / campaigns / campaign_recipients
+        -- (0278/0279): a reseña pedida, os filtros guardados, a campanha e os
+        -- destinatarios dela (guardam quem recebe uma mensagem de marketing).
+        -- (sem crase nesta prosa: o bloco inteiro é um template literal de JS.)
+        if not exists (select 1 from public.review_requests where organization_id = v_org) then
+          insert into public.review_requests (organization_id, lead_id, contact_id, due_at)
+            values (v_org,
+                    (select id from public.crm_leads where organization_id = v_org limit 1),
+                    v_contact, now());
+        end if;
+
+        if not exists (select 1 from public.smart_lists where organization_id = v_org) then
+          insert into public.smart_lists (organization_id, name, filters)
+            values (v_org, 'rls-' || v_org::text, '{"etiquetas":["rls"]}'::jsonb);
+        end if;
+
+        if not exists (select 1 from public.campaigns where organization_id = v_org) then
+          insert into public.campaigns
+            (organization_id, name, template_name, template_language, template_category)
+            values (v_org, 'rls-campanha', 'rls_msg', 'es_AR', 'marketing');
+        end if;
+
+        if not exists (select 1 from public.campaign_recipients where organization_id = v_org) then
+          insert into public.campaign_recipients (campaign_id, organization_id, contact_id)
+            values ((select id from public.campaigns where organization_id = v_org limit 1),
+                    v_org, v_contact);
+        end if;
+
         if not exists (select 1 from public.push_subscriptions where organization_id = v_org) then
           insert into public.push_subscriptions
             (organization_id, user_id, endpoint, p256dh, auth)
@@ -340,6 +368,12 @@ export const TABLES = [
   // positivo. O SELECT de `authenticated` é por COLUNA, sem as colunas cifradas:
   // a contagem abaixo usa só `organization_id` e mede o que um membro enxerga.
   "ai_provider_credentials",
+  // 0277/0278/0279 — reseñas, listas inteligentes y campañas. Os destinatários guardam
+  // quem recebe uma mensagem de marketing; vazar entre tenants entregaria a base do vizinho.
+  "review_requests",
+  "smart_lists",
+  "campaigns",
+  "campaign_recipients",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"

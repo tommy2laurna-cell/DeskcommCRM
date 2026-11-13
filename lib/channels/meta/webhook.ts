@@ -113,6 +113,8 @@ export interface InboundMessageEvent {
   /** `text` | `audio` | `image` | `video` | `document` | `sticker` | `contact` | … */
   type: string;
   text: string | null;
+  /** `true` cuando el texto es el de un botón de respuesta rápida, no algo que la persona escribió. */
+  fromButton?: boolean;
   /** Preenchido quando `type === "contact"` (cartão compartilhado). */
   sharedContact?: SharedContact | null;
   media: {
@@ -213,7 +215,13 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
           const tipo = str(raw.type) ?? "unknown";
           const corpoMidia = tipo !== "contacts" ? (raw[tipo] as Record<string, unknown> | undefined) : undefined;
           const sharedContact = tipo === "contacts" ? parseMetaInboundContact(raw) : null;
-          const tipoCrm = tipo === "contacts" ? "contact" : tipo;
+          // Toque en un botón de respuesta rápida de un mensaje aprobado: la Meta lo
+          // entrega como `type: "button"` y el texto del botón en `button.text`. Es
+          // texto elegido por la persona; tratarlo como texto es lo que permite que
+          // el botón de baja de las campañas llegue al detector de opt-out.
+          const textoDeBoton =
+            tipo === "button" ? str((raw.button as Record<string, unknown> | undefined)?.text) : null;
+          const tipoCrm = tipo === "contacts" ? "contact" : textoDeBoton ? "text" : tipo;
 
           out.push({
             kind: "inbound_message",
@@ -225,9 +233,10 @@ export function parseMetaWebhook(envelope: MetaWebhookEnvelope): MetaWebhookEven
             // A Meta manda epoch em SEGUNDOS, string. Passar direto ao Date daria 1970.
             sentAt: new Date(Number(str(raw.timestamp) ?? "0") * 1000),
             type: tipoCrm,
+            ...(textoDeBoton ? { fromButton: true } : {}),
             text:
               tipoCrm === "text"
-                ? str((raw.text as Record<string, unknown>)?.body)
+                ? (textoDeBoton ?? str((raw.text as Record<string, unknown>)?.body))
                 : sharedContact?.name ?? null,
             ...(sharedContact ? { sharedContact } : {}),
             media:
