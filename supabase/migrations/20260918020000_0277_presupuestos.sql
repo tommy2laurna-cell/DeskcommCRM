@@ -205,4 +205,7 @@ revoke all on function public.fn_crear_presupuesto(uuid, uuid, text, numeric, da
 grant execute on function public.fn_crear_presupuesto(uuid, uuid, text, numeric, date, text, jsonb)
   to authenticated, service_role;
 
+-- Las tres políticas restritivas del modo somente leitura del suporte (0274).
+select public.fn_aplicar_travas_de_suporte();
+
 notify pgrst, 'reload schema';

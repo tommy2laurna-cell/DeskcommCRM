@@ -232,6 +232,20 @@ beforeAll(() => {
                     (select id from public.crm_leads where organization_id = v_org limit 1));
         end if;
 
+        -- presupuestos (0277): lo prometido a un cliente, con monto. Vazar a linha
+        -- entrega ao vizinho precio, descuento y a quien se le ofrecio.
+        -- (sem crase nesta prosa: o bloco inteiro e um template literal de JS.)
+        if not exists (select 1 from public.presupuestos where organization_id = v_org) then
+          insert into public.presupuestos
+            (organization_id, lead_id, numero, subtotal_cents, total_cents, valido_hasta)
+            values (v_org, (select id from public.crm_leads where organization_id = v_org limit 1),
+                    1, 100, 100, current_date + 15);
+          insert into public.presupuesto_items
+            (presupuesto_id, organization_id, descripcion, cantidad, precio_unit_cents, total_cents)
+            select id, v_org, 'Item de invariante', 1, 100, 100
+              from public.presupuestos where organization_id = v_org limit 1;
+        end if;
+
         -- voice_calls (0232): a chamada pendurada na sessão de canal da org.
         -- O wacalls_call_id varia por organizacao porque a tabela tem
         -- unique (organization_id, wacalls_call_id) — mesmo cuidado do endpoint
@@ -320,6 +334,9 @@ export const TABLES = [
   // controle positivo passaria por acerto. Quem mede a escrita é a rota, em
   // `tests/unit/tarefas-rota-nao-tem-porta-dos-fundos.test.ts`.
   "crm_tasks",
+  // migration 0277 - presupuestos y sus lineas: monto y descuento ofrecidos a un cliente.
+  "presupuestos",
+  "presupuesto_items",
   // 0227 — texto de sugestões: org + visibilidade da conversa por authenticated.
   "ai_reply_drafts",
   // 0232/0235 — chamada de voz. Guarda `peer_phone` (telefone da outra ponta) e
