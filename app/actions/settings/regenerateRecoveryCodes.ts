@@ -35,25 +35,17 @@ export async function regenerateRecoveryCodes(): Promise<RegenerateRecoveryCodes
   const codes = generateRecoveryCodes();
   const rows = codes.map((c) => ({ user_id: user.id, code_hash: hashRecoveryCode(c) }));
 
-  // Delete + insert. Use admin client when available (RLS for delete may be
-  // tighter than insert). Fall back to user-scoped.
+  // Delete + insert, sempre com service role: a tabela não é escrevível pela
+  // sessão (H1). Sem a chave não se regenera.
+  if (!isServiceRoleConfigured()) return { ok: false, error: "service_unavailable" };
   let delErr: unknown = null;
   let insErr: unknown = null;
-  if (isServiceRoleConfigured()) {
-    const admin = createAdminClient();
-    const d = await admin.from("user_recovery_codes").delete().eq("user_id", user.id);
-    delErr = d.error;
-    if (!delErr) {
-      const ins = await admin.from("user_recovery_codes").insert(rows);
-      insErr = ins.error;
-    }
-  } else {
-    const d = await supabase.from("user_recovery_codes").delete().eq("user_id", user.id);
-    delErr = d.error;
-    if (!delErr) {
-      const ins = await supabase.from("user_recovery_codes").insert(rows);
-      insErr = ins.error;
-    }
+  const admin = createAdminClient();
+  const d = await admin.from("user_recovery_codes").delete().eq("user_id", user.id);
+  delErr = d.error;
+  if (!delErr) {
+    const ins = await admin.from("user_recovery_codes").insert(rows);
+    insErr = ins.error;
   }
   if (delErr) {
     const msg = (delErr as { message?: string }).message ?? "delete_failed";
