@@ -22,6 +22,7 @@ function bancoDeMemoria() {
     const filas = (tablas[nombre] ??= []);
     const filtros: Array<(f: Record<string, unknown>) => boolean> = [];
     let modo: "select" | "insert" | "upsert" = "select";
+    let upd = false;
     let payload: Record<string, unknown> = {};
     const b: Record<string, unknown> = {
       select: () => b,
@@ -29,6 +30,7 @@ function bancoDeMemoria() {
       upsert: (p: Record<string, unknown>) => ((modo = "upsert"), (payload = p), b),
       eq: (c: string, v: unknown) => (filtros.push((f) => valor(f, c) === v), b),
       is: (c: string, v: unknown) => (filtros.push((f) => (valor(f, c) ?? null) === v), b),
+      update: (p: Record<string, unknown>) => ((modo = "upsert"), (payload = p), (upd = true), b),
       limit: () => b,
       maybeSingle: async () => ({ data: filas.find((f) => filtros.every((p) => p(f))) ?? null, error: null }),
       single: async () => {

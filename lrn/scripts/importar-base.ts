@@ -354,11 +354,17 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
   const hayDefault = (ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("is_default", true).limit(1), "pipelines") as unknown[]).length > 0;
   let defaultLibre = !hayDefault;
   for (const e of plan.embudos) {
-    const ya = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("slug", e.slug).maybeSingle(), "pipeline");
-    let id: string | null = ya ? (ya as { id: string }).id : null;
-    if (ya) res.embudos.existentes++;
-    else {
-      id = await crea(res.embudos, "crm_pipelines", { organization_id: org, name: e.nombre, slug: e.slug, position: e.posicion, is_archived: e.archivado, is_default: defaultLibre && !e.archivado });
+    // El Conectado solo acepta como motivo de pérdida los canónicos o los de settings.lost_reasons del embudo.
+    const motivos = [...new Set([...plan.leads.filter((l) => l.motivoPerdida && e.etapas.some((x) => x.baseId === l.etapaBaseId)).map((l) => l.motivoPerdida!), ...(op.marca?.motivos_perdida ?? [])])];
+    const ya = ok(await db.from("crm_pipelines").select("id, settings").eq("organization_id", org).eq("slug", e.slug).maybeSingle(), "pipeline") as { id: string; settings: { lost_reasons?: string[] } | null } | null;
+    let id: string | null = ya ? ya.id : null;
+    if (ya) {
+      res.embudos.existentes++;
+      const tenia = ya.settings?.lost_reasons ?? [];
+      if (motivos.some((m) => !tenia.includes(m)) && !op.simular)
+        ok(await db.from("crm_pipelines").update({ settings: { ...(ya.settings ?? {}), lost_reasons: [...new Set([...tenia, ...motivos])] } }).eq("id", ya.id), "pipeline motivos");
+    } else {
+      id = await crea(res.embudos, "crm_pipelines", { organization_id: org, name: e.nombre, slug: e.slug, position: e.posicion, is_archived: e.archivado, is_default: defaultLibre && !e.archivado, settings: { fields: [], canonical_tags: [], lost_reasons: motivos, identity_resolution: { fields_in_priority_order: ["cpf", "phone_e164", "email"] } } });
       if (defaultLibre && !e.archivado) defaultLibre = false;
     }
     embudoId.set(e.baseId, id);
