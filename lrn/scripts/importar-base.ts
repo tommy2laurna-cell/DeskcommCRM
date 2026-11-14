@@ -526,9 +526,9 @@ function cargarEnv(): Record<string, string | undefined> {
   for (const file of [".env.local", ".env"]) {
     const p = path.join(process.cwd(), file);
     if (!fs.existsSync(p)) continue;
-    for (const line of fs.readFileSync(p, "utf8").split("\n")) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*?)?$/);
-      if (m && !out[m[1]!]) out[m[1]!] = m[2]!.replace(/^"(.*)"$/, "$1");
+    for (const line of fs.readFileSync(p, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      if (m && !out[m[1]!]) out[m[1]!] = (m[2] ?? "").replace(/^"(.*)"$/, "$1");
     }
   }
   return out;
