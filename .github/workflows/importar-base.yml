@@ -1,0 +1,95 @@
+name: importar-base
+
+# Prueba de la importación del CRM Base al Conectado contra un Postgres de verdad: Supabase local + baseline.sql
+# (lo mismo que aplica el install.sh), un Base de ejemplo generado con SUS migraciones, y el script dos veces.
+# Pasa si la segunda corrida crea 0 filas y los conteos no cambian.
+# (Va en un workflow propio porque humo.yml todavía no está en main: vive en la rama ci/humo.)
+
+on:
+  pull_request:
+    paths:
+      - "lrn/scripts/importar-base.ts"
+      - "lrn/scripts/fixture-base.ts"
+      - "lrn/fixtures/base-migraciones/**"
+      - ".github/workflows/importar-base.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  importar-dos-veces:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          # PostgREST lee el esquema al arrancar: se reinicia para que vea las tablas nuevas.
+          docker restart $(docker ps -q --filter name=supabase_rest) >/dev/null
+          sleep 8
+
+      - name: Org de prueba
+        run: |
+          pnpm e2e:env
+          cp .env.e2e .env.local
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+
+      - name: Base de ejemplo (con las migraciones del CRM Base)
+        run: pnpm exec tsx lrn/scripts/fixture-base.ts "$RUNNER_TEMP/base.sqlite"
+
+      - name: Simular, importar y volver a importar
+        run: |
+          set -euo pipefail
+          S="pnpm exec tsx lrn/scripts/importar-base.ts $RUNNER_TEMP/base.sqlite --org e2e-test-org"
+          $S --simular --salida "$RUNNER_TEMP/sim"
+          $S --salida "$RUNNER_TEMP/r1"
+          $S --salida "$RUNNER_TEMP/r2"
+          node -e '
+            const d = process.env.RUNNER_TEMP, L = (n) => JSON.parse(require("fs").readFileSync(`${d}/${n}/resultado-${n === "sim" ? "simulacion" : "real"}.json`, "utf8"));
+            const sim = L("sim"), a = L("r1"), b = L("r2"), tipos = ["embudos", "etapas", "contactos", "leads", "notas", "tareas"];
+            let mal = 0, md = "## Importar el Base dos veces\n\n| | simulación | 1.ª corrida (creados) | 2.ª corrida (creados / ya estaban) |\n|---|---|---|---|\n";
+            for (const k of tipos) {
+              const ok = b[k].creados === 0 && b[k].existentes === a[k].creados + a[k].existentes && sim[k].creados === a[k].creados;
+              if (!ok) mal++;
+              md += `| ${k} | ${sim[k].creados} | ${a[k].creados} | ${b[k].creados} / ${b[k].existentes} ${ok ? "" : " ✗"} |\n`;
+            }
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+            console.log(md);
+            if (mal) { console.error("Los conteos de la 2.ª corrida no coinciden"); process.exit(1); }
+          '
+
+      - name: Sin duplicados en la base
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -At <<'SQL' | tee dup.txt
+          select 'leads', count(*), count(distinct external_id) from crm_leads where source = 'importar-base';
+          select 'contactos', count(*), count(distinct source_metadata->>'id_externo') from contacts where source = 'importar-base';
+          select 'tareas', count(*), count(distinct description) from crm_tasks where description like 'base:t%';
+          select 'notas', count(*), count(distinct (contact_id, headline)) from lead_notes where headline like 'Base %';
+          SQL
+          awk -F'|' '$2 != $3 { print "DUPLICADOS en " $1; bad=1 } END { exit bad }' dup.txt

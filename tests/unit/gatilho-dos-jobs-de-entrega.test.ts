@@ -64,6 +64,12 @@ const DIR = join(process.cwd(), ".github/workflows");
  * que desliga um job de entrega fica visível em code review.
  */
 const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string }> = {
+  "importar-base.yml::importar-dos-veces": {
+    condicao: null,
+    efeito:
+      "Prueba que importar el CRM Base dos veces no duplica nada. Desligado, la promesa de la web " +
+      "(«migramos tus datos sin costo») dejaría de tener respaldo medido.",
+  },
   // --- a cadeia que leva o conserto até a VPS ---------------------------------
   "publish-image.yml::a-tag-veio-da-main": {
     condicao: null,
