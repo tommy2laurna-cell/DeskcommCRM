@@ -257,9 +257,9 @@ test.describe("tablero", () => {
     const f = (await forzado.json()).data as Api;
     expect(f.por_usuario.every((u) => u.user_id === AGENTE)).toBe(true);
 
-    // Y la lista del gerente, abierta a mano, no le muestra nada ajeno.
+    // Y la lista del gerente, abierta a mano, se limita a lo suyo: misma cantidad que su tablero.
     await page.goto(`/app/metrics/lista?tipo=nuevos&from=${encodeURIComponent(api.window.from)}&to=${encodeURIComponent(api.window.to)}&owner=${GERENTE}`);
-    await expect(page.getByTestId("lista-total")).toHaveText("0");
+    await expect(page.getByTestId("lista-total")).toHaveText(String(ex.nuevos));
   });
 
   test("manifest: nombre del cliente e íconos 192 y 512", async ({ request }) => {
