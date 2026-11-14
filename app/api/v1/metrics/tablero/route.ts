@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/metrics/tablero?periodo=7|30|90&owner_user_id=
- * Alcance = la RLS (fn_tablero_metrics es SECURITY INVOKER): un vendedor recibe
- * lo suyo, gerente y dueño todo. Un vendedor además queda forzado a su propio id.
+ * Alcance = la RLS (fn_tablero_metrics es SECURITY INVOKER): un vendedor queda
+ * limitado a sus leads (owner = él), gerente y dueño ven todo. Un vendedor además queda forzado a su propio id.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";

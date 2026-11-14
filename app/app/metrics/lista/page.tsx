@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { roleAtLeast } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 import { pesos, type TipoDeLista } from "@/lib/reports/tablero";
@@ -48,7 +49,9 @@ export default async function ListaDelTablero({
       .limit(200);
     if (tipo !== "nuevos") q = q.eq("status", tipo === "ganados" ? "won" : "lost");
     if (source) q = q.eq("source", source);
-    if (owner) q = q.eq("owner_user_id", owner);
+    // Igual que el tablero: un vendedor solo cuenta lo suyo (la RLS le permitiría ver también los sin asignar).
+    const dueño = roleAtLeast(org!.role, "manager") ? owner : user.id;
+    if (dueño) q = q.eq("owner_user_id", dueño);
     if (stage) {
       const { data: e } = await supabase.from("crm_stages").select("pipeline_id,position").eq("organization_id", org!.orgId).eq("id", stage).single();
       if (e) {
