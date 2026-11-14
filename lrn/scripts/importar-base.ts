@@ -223,11 +223,11 @@ export function planificar(b: Base): Plan {
     }
     const tel = t(c.telefono);
     const telE164 = tel ? normalizePhoneBR(tel) : null;
+    const ct = c.cuenta_id != null ? cuenta.get(Number(c.cuenta_id)) : undefined;
+    const lineas: string[] = [];
     const mail = t(c.email)?.toLowerCase() ?? null;
     const mailOk = mail !== null && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
     if (mail && !mailOk) lineas.push(`Email (no es válido): ${mail}`);
-    const ct = c.cuenta_id != null ? cuenta.get(Number(c.cuenta_id)) : undefined;
-    const lineas: string[] = [];
     if (tel && !telE164) lineas.push(`Teléfono (no se pudo normalizar): ${tel}`);
     if (t(c.cumple)) lineas.push(`Cumpleaños: ${c.cumple}`);
     if (ct) {
@@ -351,7 +351,7 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
   // Embudos y etapas: por (org, slug) y (embudo, slug).
   const etapaId = new Map<number, string | null>();
   const embudoId = new Map<number, string | null>();
-  const hayDefault = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("is_default", true).limit(1), "pipelines")?.length > 0;
+  const hayDefault = (ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("is_default", true).limit(1), "pipelines") as unknown[]).length > 0;
   let defaultLibre = !hayDefault;
   for (const e of plan.embudos) {
     const ya = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("slug", e.slug).maybeSingle(), "pipeline");
@@ -527,7 +527,7 @@ function cargarEnv(): Record<string, string | undefined> {
     const p = path.join(process.cwd(), file);
     if (!fs.existsSync(p)) continue;
     for (const line of fs.readFileSync(p, "utf8").split("\n")) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      const m = line.match(/^([A-Z0-9_]+)=(.*?)?$/);
       if (m && !out[m[1]!]) out[m[1]!] = m[2]!.replace(/^"(.*)"$/, "$1");
     }
   }
