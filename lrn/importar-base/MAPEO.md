@@ -34,3 +34,6 @@ Idempotencia: cada fila lleva el id del Base (`id_externo`). Nada se descarta en
 | `marca.json` palabras, campos_extra, motivos_perdida, colores.primario | No se aplican (se configuran en el Conectado); el informe lo dice | — |
 
 Qué hace el Conectado al insertar un lead (trigger `trg_emit_event_on_lead_change`): emite el evento de lead nuevo. Si el cliente ya tiene automatizaciones enganchadas a ese evento, **corren con cada oportunidad importada**: revisarlo antes del modo real.
+
+Alcance: **un Base por organización** (los ids `c`/`o`/`t` son los del archivo: dos Bases distintos en la misma org se pisarían). La marca va a `platform_branding`, que es de toda la instalación: una instalación = un cliente.
+Contacto ya existente por teléfono/email: se reutiliza sin pisarlo y lo del Base (nombre, email, etiquetas) va a una nota. Email que no es válido: va a la nota del contacto.

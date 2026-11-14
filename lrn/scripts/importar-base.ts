@@ -223,6 +223,9 @@ export function planificar(b: Base): Plan {
     }
     const tel = t(c.telefono);
     const telE164 = tel ? normalizePhoneBR(tel) : null;
+    const mail = t(c.email)?.toLowerCase() ?? null;
+    const mailOk = mail !== null && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+    if (mail && !mailOk) lineas.push(`Email (no es válido): ${mail}`);
     const ct = c.cuenta_id != null ? cuenta.get(Number(c.cuenta_id)) : undefined;
     const lineas: string[] = [];
     if (tel && !telE164) lineas.push(`Teléfono (no se pudo normalizar): ${tel}`);
@@ -240,7 +243,7 @@ export function planificar(b: Base): Plan {
       baseId: id,
       nombre: String(c.nombre).trim(),
       telefono: telE164,
-      email: t(c.email)?.toLowerCase() ?? null,
+      email: mailOk ? mail : null,
       tags: [...new Set(tagsDe(b.contactoEtiqueta, "contacto_id", id))],
       creado: ymd(c.creado),
       nota: lineas.length ? `Importado del CRM Base (contacto n.º ${id}).\n${lineas.join("\n")}` : null,
@@ -348,7 +351,7 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
   // Embudos y etapas: por (org, slug) y (embudo, slug).
   const etapaId = new Map<number, string | null>();
   const embudoId = new Map<number, string | null>();
-  const hayDefault = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("is_default", true).limit(1), "pipelines").length > 0;
+  const hayDefault = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("is_default", true).limit(1), "pipelines")?.length > 0;
   let defaultLibre = !hayDefault;
   for (const e of plan.embudos) {
     const ya = ok(await db.from("crm_pipelines").select("id").eq("organization_id", org).eq("slug", e.slug).maybeSingle(), "pipeline");
@@ -387,7 +390,10 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
     if (ex) {
       res.contactos.existentes++;
       contactoId.set(c.baseId, ex.id);
-      if (porDato) res.avisos.push(`contacto «${c.nombre}» ya existía por teléfono/email: se reutiliza y no se pisa`);
+      if (porDato) {
+        res.avisos.push(`contacto «${c.nombre}» ya existía por teléfono/email: se reutiliza y no se pisa; lo del Base va a una nota`);
+        await nota(c.baseId, { idExt: c.idExt, titular: `Base ${c.idExt} · contacto ya existente`, creada: c.creado, cuerpo: `En el CRM Base se llamaba «${c.nombre}»${c.email ? ` · ${c.email}` : ""}${c.telefono ? ` · ${c.telefono}` : ""}${c.tags.length ? ` · etiquetas: ${c.tags.join(", ")}` : ""}.` });
+      }
     } else {
       contactoId.set(c.baseId, await crea(res.contactos, "contacts", { organization_id: org, name: c.nombre, phone_number: c.telefono, email: c.email, tags: c.tags, source: SOURCE, source_metadata: { via: SOURCE, id_externo: c.idExt }, ...(c.creado ? { created_at: c.creado } : {}) }));
     }
@@ -396,7 +402,7 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
 
   async function nota(contactoBase: number, n: { idExt: string; titular: string; cuerpo: string; creada: string | null }) {
     const cid = contactoId.get(contactoBase) ?? null;
-    const ex = cid ? ok(await db.from("lead_notes").select("id").eq("organization_id", org).eq("contact_id", cid).eq("headline", n.titular).maybeSingle(), "nota") : null;
+    const ex = cid ? ok(await db.from("lead_notes").select("id").eq("organization_id", org).eq("contact_id", cid).eq("headline", n.titular).limit(1).maybeSingle(), "nota") : null;
     if (ex) return void res.notas.existentes++;
     await crea(res.notas, "lead_notes", { organization_id: org, contact_id: cid, headline: n.titular, body: n.cuerpo, ...(n.creada ? { created_at: n.creada } : {}) });
   }
@@ -427,7 +433,7 @@ export async function aplicar(db: SupabaseClient, org: string, plan: Plan, op: O
   // Tareas: sin columna de id externo; el marcador `base:t<id>` va en description y se busca por él.
   for (const q of plan.tareas) {
     const marcador = `base:${q.idExt}`;
-    const ex = ok(await db.from("crm_tasks").select("id").eq("organization_id", org).eq("description", marcador).maybeSingle(), "tarea");
+    const ex = ok(await db.from("crm_tasks").select("id").eq("organization_id", org).eq("description", marcador).limit(1).maybeSingle(), "tarea");
     if (ex) {
       res.tareas.existentes++;
       continue;
@@ -517,7 +523,7 @@ function argumentos(argv: string[]) {
 
 function cargarEnv(): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = { ...process.env };
-  for (const file of [".env", ".env.local"]) {
+  for (const file of [".env.local", ".env"]) {
     const p = path.join(process.cwd(), file);
     if (!fs.existsSync(p)) continue;
     for (const line of fs.readFileSync(p, "utf8").split("\n")) {
