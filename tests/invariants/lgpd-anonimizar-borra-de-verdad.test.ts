@@ -176,6 +176,10 @@ beforeAll(async () => {
       [f.org, f.contact, NOMBRE, `+${TELEFONO}`, f.contact],
     )
   ).rows[0]!.id;
+  // `contact.updated` es de registro y nace `done` (trg_event_log_marca_registro,
+  // solo en el INSERT): lo dejamos pendiente como un evento que un consumidor
+  // todavía no tomó.
+  await pool.query(`update event_log set status = 'pending' where id = $1`, [eventoPendiente]);
 
   // Paso 1 de la ruta: el mismo UPDATE de `fn_lgpd_anonymize_contact`.
   await pool.query(

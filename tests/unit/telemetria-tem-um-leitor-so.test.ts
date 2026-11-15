@@ -42,6 +42,8 @@ const PERMITIDOS: Record<string, string> = {
   "lib/ai/usage/aggregate.ts": "o comentário descreve a origem histórica do shape agregado",
   "app/api/v1/ai/usage/route.ts": "o comentário registra POR QUE a rota parou de somar as duas",
   "scripts/qa-wave-10.ts": "script de QA histórico, fora do caminho de produção",
+  "lib/lgpd/export-collector.ts":
+    "direito de acesso (Lei 25.326 art. 14): linhas anteriores à 0130 podem ter dado da pessoa, a cascata 0295 as redige, e o que se apaga a pedido do titular se entrega a pedido dele",
 };
 
 /** `.from("ai_invocations")` — a forma que efetivamente consulta a tabela. */
