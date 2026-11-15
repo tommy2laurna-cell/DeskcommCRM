@@ -123,3 +123,18 @@ describe("onboarding exige admin real (C1/H2)", () => {
     });
   });
 });
+
+describe("dadosDoPasso no se exporta sin auth (M8)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rolEnLaBase = "agent";
+    mfaEnDeuda = false;
+    onboardedAt = null;
+  });
+
+  it("⭐ un vendedor no lee el cuadro ni dispara a la IA de la org", async () => {
+    const { dadosDoPasso } = await import("@/app/actions/onboarding/montarQuadro");
+    // Invocada como server action: sin rol admin leído de la base, tiene que cortar.
+    await expect(dadosDoPasso()).rejects.toMatchObject({ code: "forbidden" });
+  }, 60_000); // el import en frío de montarQuadro (ai sdk) tarda
+});

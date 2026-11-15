@@ -36,9 +36,10 @@ import type { InvitePayload } from "@/lib/auth/invite-token";
  *   e-mail fica listado como **Pendente para sempre** na aba Membros, e o
  *   administrador reenvia ou revoga um convite que já foi aceito.
  *
- * Convite sem linha (emitido antes desta migration, ou instalação cujo envio
- * não tinha service-role) segue o fluxo: a checagem de revogação de MEMBERSHIP
- * dentro de `fn_accept_team_invite` continua valendo.
+ * Convite SEM linha é recusado (C1, auditoria 2026-11-14): `emitirConvite`
+ * grava a linha em toda emissão, e um token sem linha não pode ser revogado
+ * durante a sua validade. A checagem de revogação de MEMBERSHIP dentro de
+ * `fn_accept_team_invite` continua valendo como segunda defesa.
  */
 
 export type ResultadoDoConvite =
@@ -54,14 +55,15 @@ export async function aplicarConvite(params: {
 
   const admin = createAdminClient();
 
-  // Convite REVOGADO na tela de Equipe. Sem linha, segue — ver o cabeçalho.
+  // Convite REVOGADO na tela de Equipe, ou sem linha: sem linha não há como
+  // revogá-lo — ver o cabeçalho.
   const { data: linhaDoConvite } = await admin
     .from("team_invites")
     .select("revoked_at")
     .eq("id", payload.invite_id)
     .eq("organization_id", payload.organization_id)
     .maybeSingle();
-  if (linhaDoConvite?.revoked_at) return { ok: false, motivo: "invalid_or_expired" };
+  if (!linhaDoConvite || linhaDoConvite.revoked_at) return { ok: false, motivo: "invalid_or_expired" };
 
   // Org, papel e convidador vêm EXCLUSIVAMENTE do token assinado; o usuário,
   // de quem chamou. Nada aqui vem de body de requisição.
