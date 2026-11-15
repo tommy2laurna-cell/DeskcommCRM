@@ -11,7 +11,13 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *   2. crm_leads + 3. crm_lead_activities: `lib/lgpd/cascata.ts`, idempotentes,
  *      e a MESMA função que o cron `data-retention` usa para completar sozinho
  *      o que ficou pela metade
- *   4. Storage media deletion deferred to EPIC-08 worker
+ *   4. `fn_lgpd_cascade_redact_contact` (vía `cascadeRedactContact`, que antes
+ *      encola el avatar): mensajes, media, conversaciones, `event_log`, IA,
+ *      pedidos y llamadas. Antes la ruta nunca la llamaba (auditoría
+ *      2026-11-14, H7) y «Anonimizar» dejaba legibles los mensajes. Corre con
+ *      un `lgpd_requests` propio: es la constancia del derecho ejercido, la FK
+ *      de la cola de media, y si la cascada falla queda abierto y el watcher
+ *      de plazos lo alarma.
  *
  * Três desfechos em `action`, e não dois: `anonymized` (primeira execução),
  * `resumed` (já constava anonimizado E havia resíduo, redigido agora) e
@@ -29,6 +35,9 @@ import {
   houveRedacao,
   type ClienteDaCascata,
 } from "@/lib/lgpd/cascata";
+import { cascadeRedactContact, type CascadeResult } from "@/lib/lgpd/redact-cascade";
+import { createLgpdRequest } from "@/lib/lgpd/repository";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { lgpdAnonymizeSchema, validateRequest } from "@/lib/schemas";
@@ -137,6 +146,71 @@ export async function POST(req: NextRequest): Promise<Response> {
     console.error("[lgpd.anonymize]", falha);
   }
 
+  // ── Paso 4 — la cascada de la base (H7) ──────────────────────────────
+  //
+  // Idempotente: en una retomada limpia solo lo que quedó. Falla CERRADA: si
+  // no se completa, la respuesta es 500 y el pedido queda ABIERTO
+  // (`processing`, con el error) en vez de un 200 que afirme una supresión que
+  // no ocurrió. `failed` lo sacaría del watcher de plazos, que filtra
+  // `completed` y `failed`: abierto, el watcher lo alarma antes de vencer.
+  const admin = createAdminClient();
+  let pedido: { id: string; due_at: string };
+  try {
+    pedido = await createLgpdRequest({
+      organizationId: existing.organization_id,
+      requestType: "redact",
+      source: "manual",
+      contactId: existing.id,
+      receivedAt: new Date(),
+      status: "processing",
+      payload: { origen: "anonymize_route", actor_user_id: user.id, request_id: requestId },
+    });
+  } catch (err) {
+    console.error("[lgpd.anonymize] lgpd_requests", (err as Error).message);
+    return fail("internal_error", "Não foi possível registrar a solicitação de supressão.", 500, { requestId });
+  }
+
+  let cascata: CascadeResult;
+  try {
+    cascata = await cascadeRedactContact({
+      organizationId: existing.organization_id,
+      contactId: existing.id,
+      requestId: pedido.id,
+    });
+  } catch (err) {
+    const mensagem = (err as Error).message;
+    console.error("[lgpd.anonymize] cascade", mensagem);
+    await admin
+      .from("lgpd_requests")
+      .update({ error_message: mensagem.slice(0, 500) })
+      .eq("organization_id", existing.organization_id)
+      .eq("id", pedido.id);
+    await audit({
+      action: "lgpd.redact_failed",
+      actorUserId: user.id,
+      organizationId: existing.organization_id,
+      resourceType: "lgpd_request",
+      resourceId: pedido.id,
+      requestId,
+      metadata: { contact_id: existing.id, stage: "cascade" },
+    });
+    return fail("lgpd_cascade_incomplete", "A anonimização ficou incompleta. Tente novamente.", 500, {
+      requestId,
+    });
+  }
+
+  await admin
+    .from("lgpd_requests")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      cascaded_to: cascata.counts,
+      result: { contact_id: existing.id, media_queued: cascata.mediaPaths.length },
+      error_message: null,
+    })
+    .eq("organization_id", existing.organization_id)
+    .eq("id", pedido.id);
+
   // Emit + audit.
   await supabase
     .rpc("emit_event", {
@@ -173,11 +247,21 @@ export async function POST(req: NextRequest): Promise<Response> {
       // ter redigido as três mesmo tendo redigido nenhuma: sucesso declarado
       // sobre trabalho não feito, a mesma classe que esta cascata já pagou uma
       // vez, quando deixava o arquivo no bucket e auditava que o redigira.
-      redacted_tables: [...(retomada ? [] : ["contacts"]), ...redacao.tabelas],
+      redacted_tables: [
+        ...new Set([
+          ...(retomada ? [] : ["contacts"]),
+          ...redacao.tabelas,
+          ...Object.entries(cascata.counts)
+            .filter(([, n]) => n > 0)
+            .map(([tabela]) => tabela),
+        ]),
+      ],
       redacted_lead_ids: redacao.leadsRedigidas,
       redacted_activities: redacao.atividadesRedigidas,
       ...(redacao.falhas.length > 0 ? { failures: redacao.falhas } : {}),
-      storage_media_deletion: "deferred_epic_08",
+      cascaded_to: cascata.counts,
+      lgpd_request_id: pedido.id,
+      storage_media_queued: cascata.mediaPaths.length,
     },
   });
 
@@ -187,7 +271,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   // `already_anonymized` — e o diálogo mostrava "Contato já estava
   // anonimizado.", exatamente a frase que descreve o DEFEITO que esta rota
   // conserta. Quem chama não tinha como saber que houve trabalho.
-  const desfecho = !retomada ? "anonymized" : houveRedacao(redacao) ? "resumed" : "already_anonymized";
+  const cascataTocou = Object.values(cascata.counts).some((n) => n > 0) || cascata.mediaPaths.length > 0;
+  const desfecho = !retomada
+    ? "anonymized"
+    : houveRedacao(redacao) || cascataTocou
+      ? "resumed"
+      : "already_anonymized";
 
   return ok(
     {
@@ -196,6 +285,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       action: desfecho,
       redacted_lead_ids: redacao.leadsRedigidas,
       redacted_activities: redacao.atividadesRedigidas,
+      cascaded_to: cascata.counts,
+      lgpd_request_id: pedido.id,
     },
     { requestId },
   );

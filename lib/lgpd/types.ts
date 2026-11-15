@@ -34,7 +34,7 @@ export interface LgpdRequest {
   organization_id: string;
   request_type: LgpdRequestType;
   /** Origin channel that triggered the request. */
-  source: "nuvemshop" | "admin_panel" | "api";
+  source: "nuvemshop" | "manual" | "api" | "support";
   /** Internal contact id (may be null if contact not yet in CRM — L-03). */
   contact_id: string | null;
   /** Nuvemshop customer id or other external platform identifier. */

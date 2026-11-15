@@ -2,7 +2,7 @@
  * LGPD SLA alarm dispatcher.
  *
  * Triggered by the lgpd-sla-watcher cron (S-08.08) when a request is
- * approaching or past its D+5 / D+10 threshold.
+ * approaching or past its `due_at` (Ley 25.326 deadline).
  *
  * Privacy rules (L-08):
  *  - Sentry payload: zero PII — only ids, counts, thresholds.
@@ -120,8 +120,8 @@ export async function triggerSlaAlarm(
 
       const thresholdLabel =
         threshold === "data_request_d5"
-          ? "D+5 (acesso a dados)"
-          : "D+10 (anonimização/exclusão)";
+          ? "acceso a los datos: 10 días corridos (Ley 25.326, art. 14)"
+          : "supresión: 5 días hábiles (Ley 25.326, art. 16)";
 
       const dueFmt = new Date(request.due_at).toLocaleString("pt-BR", {
         timeZone: "America/Sao_Paulo",

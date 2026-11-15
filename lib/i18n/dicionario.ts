@@ -9183,6 +9183,12 @@ export const DICIONARIO: Traducoes = {
   "o compromisso": { es: "la cita" },
   "Entendi": { es: "Entendido" },
   "e-mail do convidado inválido": { es: "correo del invitado no válido" },
+  // Ley 25.326 (auditoría 2026-11-14, H7 y H8): anonimizar y pedidos del titular.
+  "Não foi possível registrar a solicitação de supressão.": { es: "No se pudo registrar el pedido de supresión." },
+  "A anonimização ficou incompleta. Tente novamente.": { es: "La anonimización quedó incompleta. Probá de nuevo." },
+  "Corpo da requisição inválido.": { es: "El cuerpo del pedido no es válido." },
+  "A data do pedido não pode estar no futuro.": { es: "La fecha del pedido no puede estar en el futuro." },
+  "Não foi possível registrar a solicitação.": { es: "No se pudo registrar el pedido." },
 };
 
 /**

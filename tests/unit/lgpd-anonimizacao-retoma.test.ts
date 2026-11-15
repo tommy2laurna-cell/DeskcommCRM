@@ -57,6 +57,35 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 
+// Passo 4 (H7): a cascada do banco, o pedido próprio e o fechamento dele.
+const cascata = vi.hoisted(() => ({
+  chamar: vi.fn(async (_args: { organizationId: string; contactId: string; requestId: string }) => ({
+    alreadyAnonymized: true,
+    counts: {} as Record<string, number>,
+    mediaPaths: [] as string[],
+  })),
+  pedidos: [] as Array<Record<string, unknown>>,
+  fechamentos: [] as Array<Record<string, unknown>>,
+}));
+vi.mock("@/lib/lgpd/redact-cascade", () => ({ cascadeRedactContact: cascata.chamar }));
+vi.mock("@/lib/lgpd/repository", () => ({
+  createLgpdRequest: vi.fn(async (input: Record<string, unknown>) => {
+    cascata.pedidos.push(input);
+    return { id: "pedido-1", due_at: "2026-11-20T02:59:59.999Z" };
+  }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => ({
+      update: (patch: Record<string, unknown>) => {
+        cascata.fechamentos.push(patch);
+        const cadeia = { eq: () => cadeia, then: (r: (v: unknown) => void) => r({ error: null }) };
+        return cadeia;
+      },
+    }),
+  }),
+}));
+
 const ORG = "22222222-2222-4222-8222-222222222222";
 const USER = "11111111-1111-4111-8111-111111111111";
 const CONTATO = "33333333-3333-4333-8333-333333333333";
@@ -171,6 +200,8 @@ async function anonimizar() {
 beforeEach(() => {
   vi.clearAllMocks();
   escrito = { contacts: [], leads: [], atividades: [] };
+  cascata.pedidos.length = 0;
+  cascata.fechamentos.length = 0;
 });
 
 describe("cascata de anonimização — retomada", () => {
@@ -304,6 +335,49 @@ describe("cascata de anonimização — retomada", () => {
 
     expect(r.status).toBe(200);
     expect(escrito.leads).toEqual([]);
+  });
+});
+
+describe("H7 — a rota chama a cascata do banco", () => {
+  it("⭐ depois do passo 1, com um pedido próprio de supressão, e o fecha como completed", async () => {
+    db(contato(), []);
+    cascata.chamar.mockResolvedValueOnce({ alreadyAnonymized: true, counts: { messages: 3, event_log: 2 }, mediaPaths: ["o/m.jpg"] });
+
+    const r = await anonimizar();
+
+    expect(r.status).toBe(200);
+    expect(cascata.pedidos[0]).toMatchObject({ requestType: "redact", source: "manual", contactId: CONTATO, status: "processing" });
+    expect(cascata.chamar).toHaveBeenCalledWith({ organizationId: ORG, contactId: CONTATO, requestId: "pedido-1" });
+    expect(cascata.fechamentos.at(-1)).toMatchObject({ status: "completed", cascaded_to: { messages: 3, event_log: 2 } });
+    expect(r.corpo.data.lgpd_request_id).toBe("pedido-1");
+  });
+
+  it("⭐ retomada cujo resíduo só existia nas mensagens diz resumed, não already_anonymized", async () => {
+    db(
+      contato({ is_anonymized: true }),
+      [{ id: "lead-ja-feita", title: "Orçamento (anonimizado)" }],
+      [{ id: "atv-ja-feita", payload: { redacted: true } }],
+    );
+    cascata.chamar.mockResolvedValueOnce({ alreadyAnonymized: true, counts: { messages: 5 }, mediaPaths: [] });
+
+    const r = await anonimizar();
+
+    expect(r.corpo.data.action).toBe("resumed");
+  });
+
+  it("⭐ falha da cascata responde 500 e deixa o pedido ABERTO para o watcher — nunca um 200 de supressão não feita", async () => {
+    db(contato(), []);
+    cascata.chamar.mockRejectedValueOnce(new Error("rpc failed: boom"));
+
+    const r = await anonimizar();
+
+    expect(r.status).toBe(500);
+    expect(r.corpo.error.code).toBe("lgpd_cascade_incomplete");
+    // Sem `status`: `failed` tiraria o pedido do watcher de prazos.
+    expect(cascata.fechamentos.at(-1)).toEqual({ error_message: "rpc failed: boom" });
+    const acoes = vi.mocked(audit).mock.calls.map((c) => (c[0] as { action: string }).action);
+    expect(acoes).toContain("lgpd.redact_failed");
+    expect(acoes).not.toContain("lgpd.anonymize_executed");
   });
 });
 

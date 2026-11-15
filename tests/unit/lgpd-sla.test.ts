@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeDueAt } from "@/lib/lgpd/sla";
+import { ABIERTO_PARA_ABOGADO, PLAZOS_LEY_25326, computeDueAt, vencimientoLegalAR } from "@/lib/lgpd/sla";
 import { HOLIDAYS_BR_ISO } from "@/lib/lgpd/holidays-br";
 
 /** Parse a YYYY-MM-DD string as a UTC Date */
@@ -146,5 +146,50 @@ describe("computeDueAt — business day SLA calculator", () => {
       return fixed.includes(md);
     }).length;
     expect(fixedCount).toBe(8 * 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ley 25.326 (Argentina): acceso 10 días corridos (art. 14), supresión 5 días
+// hábiles (art. 16). Vence al terminar el día en hora de Buenos Aires.
+// ---------------------------------------------------------------------------
+
+describe("vencimientoLegalAR — plazos de la Ley 25.326", () => {
+  it("las cifras son las de la ley y citan el artículo", () => {
+    expect(PLAZOS_LEY_25326.data_request).toEqual({ dias: 10, tipo: "corridos", fuente: "Ley 25.326, art. 14 inc. 2" });
+    expect(PLAZOS_LEY_25326.redact).toEqual({ dias: 5, tipo: "habiles", fuente: "Ley 25.326, art. 16 inc. 2" });
+  });
+
+  it("acceso: lunes 16/11 a las 10 (AR) vence el jueves 26/11 a las 23:59:59 AR", () => {
+    expect(vencimientoLegalAR("data_request", new Date("2026-11-16T10:00:00-03:00")).toISOString()).toBe(
+      "2026-11-27T02:59:59.999Z",
+    );
+  });
+
+  it("supresión: lunes 16/11 vence el lunes 23/11 (saltea el fin de semana)", () => {
+    expect(vencimientoLegalAR("redact", new Date("2026-11-16T10:00:00-03:00")).toISOString()).toBe(
+      "2026-11-24T02:59:59.999Z",
+    );
+  });
+
+  it("el día se toma en hora de Buenos Aires, no en UTC: viernes 23:30 AR sigue siendo viernes", () => {
+    // En UTC ya es sábado 21; contado en UTC vencería un día después.
+    expect(vencimientoLegalAR("data_request", new Date("2026-11-20T23:30:00-03:00")).toISOString()).toBe(
+      "2026-12-01T02:59:59.999Z",
+    );
+  });
+
+  it("supresión pedida un sábado: corren lunes a viernes de la semana siguiente", () => {
+    expect(vencimientoLegalAR("redact", new Date("2026-11-21T12:00:00-03:00")).toISOString()).toBe(
+      "2026-11-28T02:59:59.999Z",
+    );
+  });
+
+  it("cuenta prudente: un feriado se cuenta como hábil (vence antes, nunca después) y queda ⚖", () => {
+    // 8/12 (Inmaculada Concepción) cae martes en 2026 y NO se saltea.
+    expect(vencimientoLegalAR("redact", new Date("2026-12-07T10:00:00-03:00")).toISOString()).toBe(
+      "2026-12-15T02:59:59.999Z",
+    );
+    expect(ABIERTO_PARA_ABOGADO.every((linea) => linea.startsWith("⚖"))).toBe(true);
   });
 });

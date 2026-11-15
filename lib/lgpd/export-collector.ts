@@ -251,6 +251,17 @@ export interface ExportPayload {
    * próprio cascade.
    */
   voice_calls: VoiceCallRow[];
+  /**
+   * Lo que la IA guardó sobre la persona (migration 0295). Entra por la misma
+   * regla que `voice_calls`: la 0295 lo puso en la cascada de redacción, y lo
+   * que se borra a pedido del titular se le entrega a pedido de él.
+   */
+  ia?: {
+    agent_runs: Array<Record<string, unknown>>;
+    invocations: Array<Record<string, unknown>>;
+    cases: Array<Record<string, unknown>>;
+    case_events: Array<Record<string, unknown>>;
+  };
   reply_drafts?: Array<{
     id: string;
     status: string;
@@ -702,6 +713,64 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       if (!data || data.length < 500) break;
     }
   }
+  // IA — corridas, invocaciones y casos escalados de las conversaciones del
+  // contacto. Los ids vienen de la base, no del pedido.
+  const ia: NonNullable<ExportPayload["ia"]> = { agent_runs: [], invocations: [], cases: [], case_events: [] };
+  if (contactId) {
+    const convIds = conversations.map((c) => c.id);
+    const avisar = (que: string, error: { message: string }) =>
+      logger.warn(`[lgpd-export-worker] ${que} load failed`, { request_id: requestId, error: error.message });
+
+    const runs = await admin
+      .from("ai_agent_runs")
+      .select("id, status, tool_calls, error_message, started_at, completed_at")
+      .eq("organization_id", organizationId)
+      .or(
+        convIds.length > 0
+          ? `contact_id.eq.${contactId},conversation_id.in.(${convIds.join(",")})`
+          : `contact_id.eq.${contactId}`,
+      )
+      .order("started_at", { ascending: false })
+      .limit(500);
+    if (runs.error) avisar("ai agent runs", runs.error);
+    else ia.agent_runs = runs.data ?? [];
+
+    if (convIds.length > 0) {
+      const inv = await admin
+        .from("ai_invocations")
+        .select("id, invocation_kind, model, citations, error_payload, created_at")
+        .eq("organization_id", organizationId)
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (inv.error) avisar("ai invocations", inv.error);
+      else ia.invocations = inv.data ?? [];
+
+      const casos = await admin
+        .from("agent_cases")
+        .select("id, status, title, summary, blocker, opened_at, closed_at")
+        .eq("organization_id", organizationId)
+        .in("conversation_id", convIds)
+        .order("opened_at", { ascending: false })
+        .limit(500);
+      if (casos.error) avisar("agent cases", casos.error);
+      else ia.cases = casos.data ?? [];
+
+      const casoIds = ia.cases.map((c) => String(c.id));
+      if (casoIds.length > 0) {
+        const eventos = await admin
+          .from("agent_case_events")
+          .select("id, case_id, kind, actor_kind, body, created_at")
+          .eq("organization_id", organizationId)
+          .in("case_id", casoIds)
+          .order("created_at", { ascending: true })
+          .limit(2000);
+        if (eventos.error) avisar("agent case events", eventos.error);
+        else ia.case_events = eventos.data ?? [];
+      }
+    }
+  }
+
   const meeting_deliveries: MeetingDeliveryRow[] = [];
   const appointment_notices: AppointmentNoticeRow[] = [];
   if (contactId) {
@@ -807,6 +876,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     webhook_captures,
     audit_log_extract,
     reply_drafts,
+    ia,
     meeting_deliveries,
     appointment_notices,
     voice_calls,

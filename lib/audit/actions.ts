@@ -139,6 +139,7 @@ export const AUDIT_ACTIONS = [
   "lgpd.tenant_redacted",
   "lgpd.consent_changed",
   "lgpd.manually_approved",
+  "lgpd.request_created",
   "webhook.hmac_invalid",
   "lgpd.sla_alarm_triggered",
   "lgpd.sla_watcher_run",
