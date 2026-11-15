@@ -18,7 +18,7 @@ function inserirToken(aal: "aal1" | "aal2", sufixo: string): string {
       set role authenticated;
       select set_config('request.jwt.claims', '{"sub":"${GOV_ADMIN}","role":"authenticated","aal":"${aal}"}', false);
       insert into public.api_tokens(organization_id, created_by, name, prefix, token_hash)
-        values ('${GOV_ORG}', '${GOV_ADMIN}', 'h1-mfa', '${PREFIXO}${sufixo}', '\x00'::bytea);
+        values ('${GOV_ORG}', '${GOV_ADMIN}', 'h1-mfa', '${PREFIXO}${sufixo}', decode('00', 'hex'));
     `);
     return "ok";
   } catch (e) {
