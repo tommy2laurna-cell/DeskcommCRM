@@ -5,7 +5,7 @@
  * best-effort (payload forjado é possível) e o WAHA anuncia seu endereço
  * INTERNO (ex.: localhost:3000 dentro do container, mapeado p/ 3030 no
  * host). Por isso o fetch é SEMPRE reconstruído sobre WAHA_API_BASE_URL,
- * aproveitando apenas o path (`/api/files/...`, sem query) da URL anunciada — SSRF impossível por
+ * aproveitando apenas o path (`/api/files/<sessão>/...`, sem query) da URL anunciada — SSRF impossível por
  * construção (o host nunca vem do payload). A futura MetaMediaSource
  * implementa a mesma assinatura baixando via media_id + Graph API.
  */
@@ -18,24 +18,42 @@ import {
 const FETCH_TIMEOUT_MS = 30_000;
 
 /**
- * Lo único que WAHA anuncia para media: `/api/files/<archivo>` o
- * `/api/files/<sesión>/<archivo>`. Sin query y sin `..`. `media_url` lo escribe
- * el cliente (PostgREST, POST /api/v1/messages, webhook forjado) y acá viaja la
- * X-Api-Key global: cualquier otra ruta de la API de WAHA (sesiones, chats,
- * screenshot) quedaría legible para cualquier miembro (C2).
+ * Lo único que WAHA anuncia para media: `/api/files/<sesión>/<archivo>`, sin
+ * query. `media_url` lo escribe el cliente (PostgREST, POST /api/v1/messages,
+ * webhook forjado) y acá viaja la X-Api-Key global: cualquier otra ruta de la API
+ * de WAHA (sesiones, chats, screenshot) quedaría legible para cualquier miembro, y
+ * la sesión de otro tenant también (C2). Por eso la sesión del path tiene que ser
+ * la `channel_session` del mensaje, no una que diga la URL.
+ *
+ * Formato medido en el código de WAHA, no en la doc (la doc todavía muestra el
+ * formato viejo sin sesión): `MediaLocalStorage.getKey` arma
+ * `${session}/${message.id}.${ext}` desde que la media entró al Core (3ad5b67, 2024-09), igual en la imagen pineada
+ * `latest-2026.7.2` (MediaPsqlStorage arma la misma URL).
+ * https://github.com/devlikeapro/waha/blob/2026.7.2/src/core/media/local/MediaLocalStorage.ts#L91-L93
+ * `message.id` lleva `@`: `true_11111111111@c.us_AAAA….jpg`
+ * (https://waha.devlike.pro/docs/how-to/receive-messages/). Segmentos sin
+ * vacíos: `..` no pasa.
  */
-const RUTA_DE_MEDIA = /^\/api\/files\/(?:[\w-]+(?:\.[\w-]+)*\/)?[\w-]+(?:\.[\w-]+)*$/;
+const ARCHIVO_DE_MEDIA = /^[\w@-]+(?:\.[\w@-]+)*$/;
+const NOMBRE_DE_SESION = /^[\w-]+$/;
+
+function esRutaDeMediaDeLaSesion(pathname: string, sessionRef: string): boolean {
+  if (!NOMBRE_DE_SESION.test(sessionRef)) return false;
+  const prefijo = `/api/files/${sessionRef}/`;
+  return pathname.startsWith(prefijo) && ARCHIVO_DE_MEDIA.test(pathname.slice(prefijo.length));
+}
 
 export async function fetchWahaMedia(
   mediaUrl: string,
-  hintMime?: string | null,
+  hintMime: string | null | undefined,
+  sessionRef: string,
 ): Promise<FetchedMedia> {
   const base = process.env.WAHA_API_BASE_URL;
   let url: URL;
   try {
     const advertised = new URL(mediaUrl);
-    // Host/porta descartados: só path+query sobrevivem, resolvidos na base.
-    if (advertised.search || !RUTA_DE_MEDIA.test(advertised.pathname)) {
+    // Host/porta descartados: só o path sobrevive, resolvido na base.
+    if (advertised.search || !esRutaDeMediaDeLaSesion(advertised.pathname, sessionRef)) {
       throw new Error("waha_media_untrusted_path");
     }
     url = new URL(advertised.pathname, base ?? "");
