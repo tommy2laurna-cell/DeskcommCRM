@@ -15,9 +15,9 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *      encola el avatar): mensajes, media, conversaciones, `event_log`, IA,
  *      pedidos y llamadas. Antes la ruta nunca la llamaba (auditoría
  *      2026-11-14, H7) y «Anonimizar» dejaba legibles los mensajes. Corre con
- *      un `lgpd_requests` propio: es la constancia del derecho ejercido, la FK
- *      de la cola de media, y si la cascada falla queda abierto y el watcher
- *      de plazos lo alarma.
+ *      el `lgpd_requests` de supresión abierto del contacto, o con uno nuevo:
+ *      es la constancia del derecho ejercido, la FK de la cola de media, y si
+ *      algo falla queda abierto y el watcher de plazos lo alarma.
  *
  * Três desfechos em `action`, e não dois: `anonymized` (primeira execução),
  * `resumed` (já constava anonimizado E havia resíduo, redigido agora) e
@@ -154,52 +154,94 @@ export async function POST(req: NextRequest): Promise<Response> {
   // no ocurrió. `failed` lo sacaría del watcher de plazos, que filtra
   // `completed` y `failed`: abierto, el watcher lo alarma antes de vencer.
   const admin = createAdminClient();
-  let pedido: { id: string; due_at: string };
-  try {
-    pedido = await createLgpdRequest({
-      organizationId: existing.organization_id,
-      requestType: "redact",
-      source: "manual",
-      contactId: existing.id,
-      receivedAt: new Date(),
-      status: "processing",
-      payload: { origen: "anonymize_route", actor_user_id: user.id, request_id: requestId },
-    });
-  } catch (err) {
-    console.error("[lgpd.anonymize] lgpd_requests", (err as Error).message);
+
+  // El pedido ABIERTO de supresión del contacto, si existe: el que se cargó por
+  // POST /lgpd/requests (con su plazo contado desde que la persona pidió) o el
+  // de un intento anterior que quedó a medias. Crear otro dejaría ese abierto
+  // para siempre y el watcher alarmaría una supresión ya hecha.
+  let pedidoId: string;
+  const { data: aberto, error: abertoErr } = await admin
+    .from("lgpd_requests")
+    .select("id")
+    .eq("organization_id", existing.organization_id)
+    .eq("contact_id", existing.id)
+    .eq("request_type", "redact")
+    .in("status", ["received", "processing"])
+    .order("received_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (abertoErr) {
+    console.error("[lgpd.anonymize] lgpd_requests select", abertoErr.message);
     return fail("internal_error", "Não foi possível registrar a solicitação de supressão.", 500, { requestId });
   }
+  if (aberto) {
+    pedidoId = aberto.id as string;
+    const { error } = await admin
+      .from("lgpd_requests")
+      .update({ status: "processing" })
+      .eq("organization_id", existing.organization_id)
+      .eq("id", pedidoId);
+    if (error) console.error("[lgpd.anonymize] lgpd_requests processing", error.message);
+  } else {
+    try {
+      pedidoId = (
+        await createLgpdRequest({
+          organizationId: existing.organization_id,
+          requestType: "redact",
+          source: "manual",
+          contactId: existing.id,
+          receivedAt: new Date(),
+          status: "processing",
+          payload: { origen: "anonymize_route", actor_user_id: user.id, request_id: requestId },
+        })
+      ).id;
+    } catch (err) {
+      console.error("[lgpd.anonymize] lgpd_requests", (err as Error).message);
+      return fail("internal_error", "Não foi possível registrar a solicitação de supressão.", 500, { requestId });
+    }
+  }
+
+  /** Deja el pedido abierto con el error y responde 500: nunca un 200 a medias. */
+  const incompleta = async (mensagem: string, etapa: string): Promise<Response> => {
+    const { error } = await admin
+      .from("lgpd_requests")
+      .update({ error_message: mensagem.slice(0, 500) })
+      .eq("organization_id", existing.organization_id)
+      .eq("id", pedidoId);
+    if (error) console.error("[lgpd.anonymize] lgpd_requests error_message", error.message);
+    await audit({
+      action: "lgpd.redact_failed",
+      actorUserId: user.id,
+      organizationId: existing.organization_id,
+      resourceType: "lgpd_request",
+      resourceId: pedidoId,
+      requestId,
+      metadata: { contact_id: existing.id, stage: etapa },
+    });
+    return fail("lgpd_cascade_incomplete", "A anonimização ficou incompleta. Tente novamente.", 500, {
+      requestId,
+    });
+  };
 
   let cascata: CascadeResult;
   try {
     cascata = await cascadeRedactContact({
       organizationId: existing.organization_id,
       contactId: existing.id,
-      requestId: pedido.id,
+      requestId: pedidoId,
     });
   } catch (err) {
     const mensagem = (err as Error).message;
     console.error("[lgpd.anonymize] cascade", mensagem);
-    await admin
-      .from("lgpd_requests")
-      .update({ error_message: mensagem.slice(0, 500) })
-      .eq("organization_id", existing.organization_id)
-      .eq("id", pedido.id);
-    await audit({
-      action: "lgpd.redact_failed",
-      actorUserId: user.id,
-      organizationId: existing.organization_id,
-      resourceType: "lgpd_request",
-      resourceId: pedido.id,
-      requestId,
-      metadata: { contact_id: existing.id, stage: "cascade" },
-    });
-    return fail("lgpd_cascade_incomplete", "A anonimização ficou incompleta. Tente novamente.", 500, {
-      requestId,
-    });
+    return incompleta(mensagem, "cascade");
+  }
+  // Los pasos 2 y 3 (cascata.ts) son best-effort; con falla, el pedido no se
+  // cierra como cumplido.
+  if (redacao.falhas.length > 0) {
+    return incompleta(JSON.stringify(redacao.falhas), "leads_activities");
   }
 
-  await admin
+  const { error: cierreErr } = await admin
     .from("lgpd_requests")
     .update({
       status: "completed",
@@ -209,7 +251,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       error_message: null,
     })
     .eq("organization_id", existing.organization_id)
-    .eq("id", pedido.id);
+    .eq("id", pedidoId);
+  // La supresión SÍ ocurrió; el pedido queda `processing` y el watcher avisa.
+  if (cierreErr) console.error("[lgpd.anonymize] lgpd_requests completed", cierreErr.message);
 
   // Emit + audit.
   await supabase
@@ -258,9 +302,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       ],
       redacted_lead_ids: redacao.leadsRedigidas,
       redacted_activities: redacao.atividadesRedigidas,
-      ...(redacao.falhas.length > 0 ? { failures: redacao.falhas } : {}),
       cascaded_to: cascata.counts,
-      lgpd_request_id: pedido.id,
+      lgpd_request_id: pedidoId,
       storage_media_queued: cascata.mediaPaths.length,
     },
   });
@@ -286,7 +329,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       redacted_lead_ids: redacao.leadsRedigidas,
       redacted_activities: redacao.atividadesRedigidas,
       cascaded_to: cascata.counts,
-      lgpd_request_id: pedido.id,
+      lgpd_request_id: pedidoId,
     },
     { requestId },
   );

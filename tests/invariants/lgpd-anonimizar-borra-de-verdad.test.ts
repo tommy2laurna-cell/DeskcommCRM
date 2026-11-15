@@ -4,6 +4,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { replyFixture } from "../support/autonomia-fixture";
+import { seedGov } from "./gov-helpers";
 
 /**
  * «ANONIMIZAR» BORRA DE VERDAD (auditoría 2026-11-14, H7 — migration 0295).
@@ -115,11 +116,53 @@ async function tablasQueContienen(needles: string[]): Promise<string[]> {
   return hallazgos;
 }
 
+/** Lead ligada por `contact_id` y otra ligada SOLO por `crm_lead_links`, con actividad. */
+async function sembrarLeads(x: Fixture, nombre: string): Promise<void> {
+  const pipeline = randomUUID();
+  const stage = randomUUID();
+  const directa = randomUUID();
+  const ligada = randomUUID();
+  await pool.query(`insert into crm_pipelines (id, organization_id, name, slug) values ($1, $2, 'Funil', $1::text)`, [
+    pipeline,
+    x.org,
+  ]);
+  await pool.query(
+    `insert into crm_stages (id, organization_id, pipeline_id, name, slug, position) values ($1, $2, $3, 'Entrada', 'entrada', 1)`,
+    [stage, x.org, pipeline],
+  );
+  // El nombre va DESPUÉS del carácter 20: la regla del título conserva 20.
+  for (const [id, contato] of [
+    [directa, x.contact],
+    [ligada, null],
+  ] as const) {
+    await pool.query(
+      `insert into crm_leads (id, organization_id, pipeline_id, stage_id, contact_id, title, description, custom_fields, tags)
+       values ($1, $2, $3, $4, $5, 'Presupuesto techo y canaleta para ' || $6, 'Llamar a ' || $6,
+         jsonb_build_object('quien', $6::text), array[$6::text])`,
+      [id, x.org, pipeline, stage, contato, nombre],
+    );
+  }
+  await pool.query(
+    `insert into crm_lead_links (organization_id, lead_id, target_kind, target_id, link_kind)
+     values ($1, $2, 'contact', $3, 'primary')`,
+    [x.org, ligada, x.contact],
+  );
+  await pool.query(
+    `insert into crm_lead_activities (organization_id, lead_id, contact_id, source_module, type, payload, metadata, reason)
+     values ($1, $2, null, 'crm', 'note', jsonb_build_object('texto', $3::text), jsonb_build_object('quien', $3::text),
+       'el agente habló con ' || $3)`,
+    [x.org, ligada, nombre],
+  );
+}
+
 beforeAll(async () => {
+  seedGov();
   f = await replyFixture(pool);
   vecina = await replyFixture(pool);
   await sembrarPii(f, NOMBRE, TELEFONO, EMAIL);
   await sembrarPii(vecina, VECINA, TELEFONO_VECINA, "ana.vecinaprueba@ejemplo.test");
+  await sembrarLeads(f, NOMBRE);
+  await sembrarLeads(vecina, VECINA);
 
   // El bus: un evento pendiente con nombre y teléfono, como emite un consumidor.
   eventoPendiente = (
@@ -161,7 +204,16 @@ afterAll(async () => {
 describe("anonimizar desde la ruta borra mensajes, media, bus e IA", () => {
   it("antes de la cascada la PII está en mensajes, bus e IA (el defecto H7)", async () => {
     const tablas = await tablasQueContienen([NOMBRE, TELEFONO]);
-    for (const t of ["messages", "conversations", "event_log", "ai_agent_runs", "ai_invocations", "agent_cases"]) {
+    for (const t of [
+      "messages",
+      "conversations",
+      "event_log",
+      "ai_agent_runs",
+      "ai_invocations",
+      "agent_cases",
+      "crm_leads",
+      "crm_lead_activities",
+    ]) {
       expect(tablas).toContain(t);
     }
   });
@@ -182,6 +234,8 @@ describe("anonimizar desde la ruta borra mensajes, media, bus e IA", () => {
       "ai_invocations",
       "agent_cases",
       "agent_case_events",
+      "leads",
+      "activities",
     ]) {
       expect(r.counts[t], t).toBeGreaterThan(0);
     }
@@ -236,7 +290,16 @@ describe("anonimizar desde la ruta borra mensajes, media, bus e IA", () => {
 
   it("la otra organización queda intacta", async () => {
     expect(await tablasQueContienen([VECINA, TELEFONO_VECINA])).toEqual(
-      expect.arrayContaining(["contacts", "conversations", "messages", "ai_agent_runs", "ai_invocations", "agent_cases"]),
+      expect.arrayContaining([
+        "contacts",
+        "conversations",
+        "messages",
+        "ai_agent_runs",
+        "ai_invocations",
+        "agent_cases",
+        "crm_leads",
+        "crm_lead_activities",
+      ]),
     );
   });
 });

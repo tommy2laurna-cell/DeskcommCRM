@@ -27354,11 +27354,44 @@ begin
   v_efeito := v_efeito + v_count;
   v_counts := v_counts || jsonb_build_object('messages', v_count);
 
-  -- 4 y 5. Actividades y leads: solo en la primera vez. Con el contacto ya
-  --    anonimizado son de `lib/lgpd/cascata.ts` (la ruta y el cron de
-  --    retención), que corta el título con otra regla; pisarlo acá daría dos
-  --    títulos distintos para la misma lead.
-  if not v_already then
+  -- 4 y 5. Actividades y leads. Primera vez: el rótulo. Ya anonimizado (la
+  --    ruta corre el paso 1 antes): todo lo demás de la lead y la actividad se
+  --    limpia acá, y el TÍTULO sigue la regla de `lib/lgpd/cascata.ts`
+  --    (TITULO_PRESERVADO = 20 y SUFIJO_ANONIMIZADO = ' (anonimizado)'), para
+  --    que la ruta y el cron de retención no dejen dos títulos distintos. Esto
+  --    alcanza también a las leads ligadas solo por `crm_lead_links`, que
+  --    `cascata.ts` no ve.
+  if v_already then
+    update crm_lead_activities set
+      payload = '{"redacted": true}'::jsonb,
+      metadata = '{}'::jsonb,
+      reason = null
+    where organization_id = p_organization_id
+      and (contact_id = p_contact_id or lead_id = any(v_leads))
+      and ((payload is distinct from '{"redacted": true}'::jsonb and payload <> '{}'::jsonb)
+           or metadata <> '{}'::jsonb or reason is not null);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('activities', v_count);
+
+    update crm_leads set
+      title = case
+        when coalesce(title, '') like '% (anonimizado)' or title = v_anon_label then title
+        else left(coalesce(title, ''), 20) || ' (anonimizado)'
+      end,
+      description = null,
+      custom_fields = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where organization_id = p_organization_id and id = any(v_leads)
+      and (not (coalesce(title, '') like '% (anonimizado)' or title = v_anon_label)
+           or description is not null or custom_fields <> '{}'::jsonb
+           or source_metadata <> '{}'::jsonb or tags <> '{}'::text[]);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('leads', v_count);
+  else
     update crm_lead_activities set
       payload = '{}'::jsonb,
       metadata = '{}'::jsonb,
@@ -27453,8 +27486,7 @@ begin
       or (e.entity_kind = 'message' and e.entity_id in (
             select m.id from messages m
               where m.organization_id = p_organization_id and m.conversation_id = any(v_convs)))
-      or e.payload->>'contact_id' = p_contact_id::text
-      or e.payload->>'conversation_id' = any(v_convs::text[])
+      or (e.payload ? 'contact_id' and e.payload->>'contact_id' = p_contact_id::text)
     );
   get diagnostics v_count = row_count;
   v_efeito := v_efeito + v_count;
@@ -27537,6 +27569,13 @@ end;
 $$;
 revoke all on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) to service_role;
+
+-- Sin este índice, `payload->>'contact_id'` recorre todo el event_log de la org
+-- con el candado del contacto tomado. Lo que entra por entidad ya usa
+-- `event_log_entity_idx`.
+create index if not exists event_log_payload_contact_idx
+  on public.event_log (organization_id, (payload->>'contact_id'))
+  where payload ? 'contact_id';
 
 notify pgrst, 'reload schema';
 

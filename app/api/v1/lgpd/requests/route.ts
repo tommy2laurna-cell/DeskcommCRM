@@ -191,6 +191,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     .maybeSingle();
   if (contatoErr) return fail("internal_error", contatoErr.message, 500, { requestId });
   if (!contato) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+  // Supresión ya cumplida: abrir otro plazo legal sería afirmar un pendiente que
+  // no existe. El acceso sí sigue (la persona puede pedir qué quedó).
+  if (input.request_type === "redact" && contato.is_anonymized) {
+    return fail("state_conflict", t("Este contato já foi anonimizado."), 409, { requestId });
+  }
 
   // Duplo clique ou o mesmo pedido cadastrado duas vezes: devolve o aberto, não
   // cria um segundo prazo para o mesmo direito.

@@ -21,6 +21,13 @@ import type { LgpdRequest } from "./types";
 
 export type AlarmThreshold = "data_request_d5" | "redact_d10";
 
+/** Qué plazo vence, por tipo de pedido. `store_redact` es de la plataforma, no de la ley. */
+const ROTULO_DO_PRAZO: Record<LgpdRequest["request_type"], string> = {
+  data_request: "acceso a los datos: 10 días corridos (Ley 25.326, art. 14)",
+  redact: "supresión: 5 días hábiles (Ley 25.326, art. 16)",
+  store_redact: "baja de la tienda: plazo de la plataforma",
+};
+
 export interface TriggerSlaAlarmArgs {
   request: LgpdRequest;
   threshold: AlarmThreshold;
@@ -118,10 +125,7 @@ export async function triggerSlaAlarm(
 
       const subject = `[LGPD] Solicitação ${shortId} próxima do vencimento`;
 
-      const thresholdLabel =
-        threshold === "data_request_d5"
-          ? "acceso a los datos: 10 días corridos (Ley 25.326, art. 14)"
-          : "supresión: 5 días hábiles (Ley 25.326, art. 16)";
+      const thresholdLabel = ROTULO_DO_PRAZO[request.request_type];
 
       const dueFmt = new Date(request.due_at).toLocaleString("pt-BR", {
         timeZone: "America/Sao_Paulo",

@@ -9189,6 +9189,7 @@ export const DICIONARIO: Traducoes = {
   "Corpo da requisição inválido.": { es: "El cuerpo del pedido no es válido." },
   "A data do pedido não pode estar no futuro.": { es: "La fecha del pedido no puede estar en el futuro." },
   "Não foi possível registrar a solicitação.": { es: "No se pudo registrar el pedido." },
+  "Este contato já foi anonimizado.": { es: "Este contacto ya fue anonimizado." },
 };
 
 /**

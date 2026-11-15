@@ -66,6 +66,8 @@ const cascata = vi.hoisted(() => ({
   })),
   pedidos: [] as Array<Record<string, unknown>>,
   fechamentos: [] as Array<Record<string, unknown>>,
+  /** O pedido de supressão já aberto para o contato, se houver. */
+  aberto: null as { id: string } | null,
 }));
 vi.mock("@/lib/lgpd/redact-cascade", () => ({ cascadeRedactContact: cascata.chamar }));
 vi.mock("@/lib/lgpd/repository", () => ({
@@ -77,6 +79,16 @@ vi.mock("@/lib/lgpd/repository", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
+      select: () => {
+        const q: Record<string, unknown> = {
+          eq: () => q,
+          in: () => q,
+          order: () => q,
+          limit: () => q,
+          maybeSingle: async () => ({ data: cascata.aberto, error: null }),
+        };
+        return q;
+      },
       update: (patch: Record<string, unknown>) => {
         cascata.fechamentos.push(patch);
         const cadeia = { eq: () => cadeia, then: (r: (v: unknown) => void) => r({ error: null }) };
@@ -202,6 +214,7 @@ beforeEach(() => {
   escrito = { contacts: [], leads: [], atividades: [] };
   cascata.pedidos.length = 0;
   cascata.fechamentos.length = 0;
+  cascata.aberto = null;
 });
 
 describe("cascata de anonimização — retomada", () => {
@@ -375,9 +388,24 @@ describe("H7 — a rota chama a cascata do banco", () => {
     expect(r.corpo.error.code).toBe("lgpd_cascade_incomplete");
     // Sem `status`: `failed` tiraria o pedido do watcher de prazos.
     expect(cascata.fechamentos.at(-1)).toEqual({ error_message: "rpc failed: boom" });
+    expect(cascata.fechamentos.some((f) => f.status === "completed")).toBe(false);
     const acoes = vi.mocked(audit).mock.calls.map((c) => (c[0] as { action: string }).action);
     expect(acoes).toContain("lgpd.redact_failed");
     expect(acoes).not.toContain("lgpd.anonymize_executed");
+  });
+});
+
+describe("H7 — o pedido aberto é o que se cumpre", () => {
+  it("⭐ reaproveita o pedido de supressão aberto (o do POST /requests) em vez de criar outro", async () => {
+    db(contato(), []);
+    cascata.aberto = { id: "pedido-do-titular" };
+
+    const r = await anonimizar();
+
+    expect(r.status).toBe(200);
+    expect(cascata.pedidos).toEqual([]);
+    expect(cascata.chamar).toHaveBeenCalledWith(expect.objectContaining({ requestId: "pedido-do-titular" }));
+    expect(cascata.fechamentos.at(-1)).toMatchObject({ status: "completed" });
   });
 });
 

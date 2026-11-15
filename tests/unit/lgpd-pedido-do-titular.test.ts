@@ -120,6 +120,12 @@ describe("POST /api/v1/lgpd/requests", () => {
     expect(vi.mocked(createLgpdRequest)).not.toHaveBeenCalled();
   });
 
+  it("supresión de un contacto ya anonimizado da 409: no se abre un plazo que ya se cumplió", async () => {
+    filas.contacts = { id: CONTATO, is_anonymized: true };
+    expect((await pedir({ request_type: "redact", contact_id: CONTATO })).status).toBe(409);
+    expect((await pedir({ request_type: "data_request", contact_id: CONTATO })).status).toBe(201);
+  });
+
   it("un pedido igual abierto se devuelve, no se crea un segundo plazo", async () => {
     filas.lgpd_requests = { id: "pedido-viejo", due_at: "2026-11-20T02:59:59.999Z", status: "received" };
     const r = await pedir({ request_type: "redact", contact_id: CONTATO });
