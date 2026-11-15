@@ -60,13 +60,14 @@ async function sembrarPii(x: Fixture, nombre: string, telefono: string, email: s
      where organization_id = $1 and id = $2`,
     [x.org, x.conversation, nombre],
   );
+  const mensaje = randomUUID();
   await pool.query(
     `insert into messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction,
        status, body, media_url, media_mime, media_storage_path, error_message, metadata)
      values ($1, $2, $3, $4, $5, 'image', 'inbound', 'received', 'Hola, soy ' || $6 || ' y mi teléfono es +' || $7,
-       'https://waha.test/api/files/' || $7 || '.jpg', 'image/jpeg', $2::text || '/media/' || $1::text || '.jpg',
+       'https://waha.test/api/files/' || $7 || '.jpg', 'image/jpeg', $8,
        'falló con ' || $6, jsonb_build_object('pushName', $6::text))`,
-    [randomUUID(), x.org, x.conversation, x.channel, x.contact, nombre, telefono],
+    [mensaje, x.org, x.conversation, x.channel, x.contact, nombre, telefono, `${x.org}/media/${mensaje}.jpg`],
   );
   await pool.query(
     `insert into ai_agent_runs (organization_id, agent_id, agent_version_id, conversation_id, contact_id,
@@ -122,9 +123,10 @@ async function sembrarLeads(x: Fixture, nombre: string): Promise<void> {
   const stage = randomUUID();
   const directa = randomUUID();
   const ligada = randomUUID();
-  await pool.query(`insert into crm_pipelines (id, organization_id, name, slug) values ($1, $2, 'Funil', $1::text)`, [
+  await pool.query(`insert into crm_pipelines (id, organization_id, name, slug) values ($1, $2, 'Funil', $3)`, [
     pipeline,
     x.org,
+    pipeline,
   ]);
   await pool.query(
     `insert into crm_stages (id, organization_id, pipeline_id, name, slug, position) values ($1, $2, $3, 'Entrada', 'entrada', 1)`,
@@ -169,19 +171,19 @@ beforeAll(async () => {
     await pool.query<{ id: string }>(
       `insert into event_log (organization_id, event_type, entity_kind, entity_id, payload)
        values ($1, 'contact.updated', 'contact', $2,
-         jsonb_build_object('contact_id', $2::text, 'name', $3::text, 'phone', $4::text))
+         jsonb_build_object('contact_id', $5::text, 'name', $3::text, 'phone', $4::text))
        returning id`,
-      [f.org, f.contact, NOMBRE, `+${TELEFONO}`],
+      [f.org, f.contact, NOMBRE, `+${TELEFONO}`, f.contact],
     )
   ).rows[0]!.id;
 
   // Paso 1 de la ruta: el mismo UPDATE de `fn_lgpd_anonymize_contact`.
   await pool.query(
-    `update contacts set name = null, display_name = 'Contato Anonimizado #' || substring($2::text from 1 for 8),
+    `update contacts set name = null, display_name = 'Contato Anonimizado #' || $3,
        email = null, phone_number = null, cpf_encrypted = null, cpf_hash = null, birthdate = null,
        is_anonymized = true, anonymized_at = now(), updated_at = now()
      where organization_id = $1 and id = $2`,
-    [f.org, f.contact],
+    [f.org, f.contact, f.contact.slice(0, 8)],
   );
   fechaDelDerecho = (
     await pool.query<{ t: string }>(`select anonymized_at::text as t from contacts where id = $1`, [f.contact])
