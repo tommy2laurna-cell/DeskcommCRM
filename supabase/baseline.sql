@@ -27207,6 +27207,15 @@ alter table public.organizations
 -- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.
 revoke all on table public.user_recovery_codes from anon, authenticated;
 
+-- ---- api_tokens só se cria com MFA provada (migration 0278) ----
+-- Auditoria 2026-11-14, H1: admin aal1 inseria token persistente sem MFA.
+grant execute on function public.fn_session_mfa_proven() to authenticated;
+
+drop policy if exists api_tokens_insert_exige_mfa on public.api_tokens;
+create policy api_tokens_insert_exige_mfa on public.api_tokens
+  as restrictive for insert to authenticated
+  with check (public.fn_session_mfa_proven());
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna

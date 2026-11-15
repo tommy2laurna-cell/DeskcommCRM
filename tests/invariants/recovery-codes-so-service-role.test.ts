@@ -28,7 +28,7 @@ describe("user_recovery_codes solo con service role (H1)", () => {
   for (const rol of ["authenticated", "anon"] as const) {
     it(`⭐ ${rol} no inserta, lee, actualiza ni borra`, () => {
       expect(
-        comoRol(rol, `insert into public.user_recovery_codes(user_id, code_hash) values ('${UID}', '\x00')`),
+        comoRol(rol, `insert into public.user_recovery_codes(user_id, code_hash) values ('${UID}', '\\x00')`),
       ).toMatch(/permission denied/i);
       expect(comoRol(rol, "select 1 from public.user_recovery_codes limit 1")).toMatch(/permission denied/i);
       expect(comoRol(rol, "update public.user_recovery_codes set used_at = now()")).toMatch(/permission denied/i);
