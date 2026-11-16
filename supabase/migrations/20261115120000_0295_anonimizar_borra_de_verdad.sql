@@ -139,12 +139,16 @@ begin
     media_size_bytes = null,
     media_storage_path = null,
     error_message = null,
+    -- external_id trae el número de WhatsApp (`549...@c.us_<id>`). Sigue único por
+    -- org (messages_org_external_id_unique) y no se puede volver a casar con nada.
+    external_id = case when external_id is null then null else 'lgpd-redactado:' || id::text end,
     metadata = '{}'::jsonb,
     updated_at = now()
   where organization_id = p_organization_id and conversation_id = any(v_convs)
     and (body is distinct from '[mensagem anonimizada]' or media_url is not null
          or media_mime is not null or media_size_bytes is not null
          or media_storage_path is not null or error_message is not null
+         or (external_id is not null and external_id not like 'lgpd-redactado:%')
          or metadata <> '{}'::jsonb);
   get diagnostics v_count = row_count;
   v_efeito := v_efeito + v_count;

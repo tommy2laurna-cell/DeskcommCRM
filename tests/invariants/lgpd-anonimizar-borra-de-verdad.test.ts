@@ -63,10 +63,10 @@ async function sembrarPii(x: Fixture, nombre: string, telefono: string, email: s
   const mensaje = randomUUID();
   await pool.query(
     `insert into messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction,
-       status, body, media_url, media_mime, media_storage_path, error_message, metadata)
+       status, body, media_url, media_mime, media_storage_path, error_message, metadata, external_id)
      values ($1, $2, $3, $4, $5, 'image', 'inbound', 'received', 'Hola, soy ' || $6 || ' y mi teléfono es +' || $7,
        'https://waha.test/api/files/' || $7 || '.jpg', 'image/jpeg', $8,
-       'falló con ' || $6, jsonb_build_object('pushName', $6::text))`,
+       'falló con ' || $6, jsonb_build_object('pushName', $6::text), $7 || '@c.us_' || $1::text)`,
     [mensaje, x.org, x.conversation, x.channel, x.contact, nombre, telefono, `${x.org}/media/${mensaje}.jpg`],
   );
   await pool.query(
@@ -256,6 +256,20 @@ describe("anonimizar desde la ruta borra mensajes, media, bus e IA", () => {
       [f.org, r.media_paths[0], pedido],
     );
     expect(cola.rowCount).toBe(1);
+  });
+
+  it("messages.external_id ya no trae el número de WhatsApp, sigue único y la vecina conserva el suyo", async () => {
+    const { rows } = await pool.query<{ external_id: string; id: string }>(
+      `select id, external_id from messages where organization_id = $1 and conversation_id = $2`,
+      [f.org, f.conversation],
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const m of rows) expect(m.external_id).toBe(`lgpd-redactado:${m.id}`);
+    const otra = await pool.query<{ external_id: string }>(
+      `select external_id from messages where organization_id = $1 and conversation_id = $2`,
+      [vecina.org, vecina.conversation],
+    );
+    expect(otra.rows[0]!.external_id).toContain(TELEFONO_VECINA);
   });
 
   it("el evento pendiente no se procesa sobre la persona: pasa a dead y conserva solo ids", async () => {

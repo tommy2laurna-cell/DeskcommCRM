@@ -62,13 +62,12 @@ export async function confirmMfaEnroll(
     code_hash: hashRecoveryCode(c),
   }));
 
-  // Try user-scoped first (RLS policy `recovery_codes_self` permits insert
-  // where user_id = auth.uid()). Fall back to admin if RLS rejects (e.g. AAL
-  // policy mismatch).
-  let { error: insertErr } = await supabase.from("user_recovery_codes").insert(rows);
-  if (insertErr && isServiceRoleConfigured()) {
-    const admin = createAdminClient();
-    const r = await admin.from("user_recovery_codes").insert(rows);
+  // Só com service role: `user_recovery_codes` não é escrevível pela sessão (H1).
+  let insertErr: { message: string } | null = {
+    message: "SUPABASE_SERVICE_ROLE_KEY not configured",
+  };
+  if (isServiceRoleConfigured()) {
+    const r = await createAdminClient().from("user_recovery_codes").insert(rows);
     insertErr = r.error;
   }
   if (insertErr) {

@@ -134,11 +134,11 @@ describe("o que cada canal faz com a URL", () => {
     expect(z).toMatch(/res\.headers\.get\("content-type"\)/);
   });
 
-  it("o canal por QR delega no que já existia — comportamento idêntico", () => {
-    // O risco desta mudança é mexer no canal que funciona bem. Ele chama a
-    // MESMA função, com os mesmos argumentos; só mudou quem a escolhe.
+  it("o canal por QR delega no que já existia, agora com a sessão da mensagem (C2)", () => {
+    // Mesma função; desde C2 também recebe a `sessionRef`, que ata o
+    // `/api/files/<sesión>/` do path à channel_session da mensagem.
     const w = readFileSync("lib/channels/adapters/waha.ts", "utf8");
-    expect(w).toMatch(/return fetchWahaMedia\(input\.url, input\.hintMime \?\? null\)/);
+    expect(w).toMatch(/return fetchWahaMedia\(input\.url, input\.hintMime \?\? null, input\.sessionRef\)/);
   });
 
   it("os dois devolvem o MESMO tipo, reusado e não redefinido", () => {

@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { fail } from "@/lib/api/wrappers";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { esMimeServibleInline, isMediaPathOfOrg } from "@/lib/messaging/media/upload-validation";
 import {
   CHANNEL_SESSION_REF_COLUMNS,
   DEFAULT_CHANNEL_PROVIDER,
@@ -66,6 +67,15 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
 
   if (msg.media_storage_path) {
+    // M1: acá firma la service role, así que el path tiene que ser de la org
+    // activa: `<orgB>/<conv>/<archivo>` devolvía la media de otro tenant. Org y
+    // no `<org>/<conversación>/`: la fusión de contactos mueve mensajes de
+    // conversación sin renombrar el archivo (baseline.sql, fn de fusión) y su
+    // media dejaría de verse. La conversación se valida al escribir: el handler
+    // de envío y el trigger de la migration 0291.
+    if (!isMediaPathOfOrg(msg.media_storage_path, activeOrg.orgId)) {
+      return fail("not_found", t("Mensagem sem mídia."), 404, { requestId });
+    }
     const admin = createAdminClient();
     const { data: signed, error: signErr } = await admin.storage
       .from("whatsapp-media")
@@ -116,10 +126,13 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
         url: msg.media_url,
         hintMime: msg.media_mime,
       });
+      const inline = esMimeServibleInline(media.mime);
       return new Response(new Uint8Array(media.buffer), {
         status: 200,
         headers: {
-          "Content-Type": media.mime,
+          "Content-Type": inline ? media.mime : "application/octet-stream",
+          ...(inline ? {} : { "Content-Disposition": "attachment" }),
+          "X-Content-Type-Options": "nosniff",
           "Cache-Control": "private, max-age=60",
           "X-Request-Id": requestId,
         },

@@ -69,3 +69,17 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
     },
   };
 }
+
+/**
+ * Igual que `requirePlatformAdmin`, pero para ESCRIBIR: exige `scope = full`.
+ * Un platform admin `support_readonly` mira, no suspende ni cambia ajustes de
+ * la plataforma (H4 / M14). Lanza (no redirige) para que los `try/catch` de las
+ * rutas lo conviertan en 403.
+ */
+export async function requirePlatformAdminWrite(): Promise<PlatformAdminContext> {
+  const ctx = await requirePlatformAdmin();
+  if (ctx.platformAdmin.scope !== "full") {
+    throw new Error("platform_admin_scope_insufficient");
+  }
+  return ctx;
+}
