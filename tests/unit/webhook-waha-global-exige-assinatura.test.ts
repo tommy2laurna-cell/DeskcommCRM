@@ -182,7 +182,7 @@ describe("WAHA_WEBHOOK_REQUIRE_SIGNATURE em produção", () => {
     vi.stubEnv("NEXT_PHASE", "phase-production-build");
     vi.stubEnv("WAHA_WEBHOOK_REQUIRE_SIGNATURE", undefined as unknown as string);
     delete process.env.WAHA_WEBHOOK_REQUIRE_SIGNATURE;
-    const { env } = await vi.importActual<typeof import("@/lib/env")>("@/lib/env");
+    const { env } = await vi.importActual<{ env: { WAHA_WEBHOOK_REQUIRE_SIGNATURE: string } }>("@/lib/env");
     expect(env.WAHA_WEBHOOK_REQUIRE_SIGNATURE).toBe("true");
   });
 });
