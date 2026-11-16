@@ -70,6 +70,25 @@ describe("actions de admin exigen MFA probado (H3)", () => {
     expect(await connectNuvemshop()).toMatchObject({ ok: false, error: "forbidden" });
   });
 
+  it("⭐ disconnectNuvemshop", async () => {
+    const { disconnectNuvemshop } = await import("@/app/actions/integrations/disconnectNuvemshop");
+    expect(await disconnectNuvemshop()).toMatchObject({ ok: false, error: "forbidden" });
+    expect(adminTocado).not.toHaveBeenCalled();
+  });
+
+  const ID = "11111111-1111-4111-8111-111111111111";
+  it.each([
+    ["pauseAgentAction", (m: any) => m.pauseAgentAction(ID)],
+    ["unpauseAgentAction", (m: any) => m.unpauseAgentAction(ID)],
+    ["archiveAgentAction", (m: any) => m.archiveAgentAction(ID)],
+    ["renameAgentAction", (m: any) => m.renameAgentAction(ID, "Nuevo")],
+    ["duplicateAgentAction", (m: any) => m.duplicateAgentAction(ID)],
+  ])("⭐ %s", async (_n, call) => {
+    const m = await import("@/app/app/ai/agents/_actions");
+    expect(await call(m)).toMatchObject({ ok: false });
+    expect(adminTocado).not.toHaveBeenCalled();
+  });
+
   it("par de vacuidad: sin deuda de MFA, connectNuvemshop llega más lejos que 'forbidden'", async () => {
     mfaEnDeuda = false;
     const { connectNuvemshop } = await import("@/app/actions/integrations/connectNuvemshop");
