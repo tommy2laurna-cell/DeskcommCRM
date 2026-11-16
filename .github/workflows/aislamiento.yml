@@ -1,0 +1,218 @@
+name: aislamiento
+
+# Prueba de dos organizaciones (auditoría 2026-11-14, seguridad.md § 3).
+#
+# Un atacante con usuarios en ORG_A intenta leer y escribir datos de ORG_B por
+# las tres puertas reales: PostgREST (anon key y JWT de usuario), la API HTTP
+# del app (cookie de sesión, server actions y webhooks públicos) y el MCP HTTP
+# (Bearer dsk_). Cada fila de B lleva un canario `CANARIO-B-<uuid>`; el job
+# falla si algún body que recibió un actor de A lo contiene, o si cambió el
+# conteo de filas de B.
+#
+# Las imágenes se COMPILAN desde el commit del checkout (no se bajan de GHCR):
+# lo que se mide es exactamente el código de esta rama. Se corre dos veces,
+# con Caddy (el Caddyfile de producción delante) y sin Caddy, porque el webhook
+# global de WAHA (H5) y el XFF dependen del proxy.
+#
+# Hoy, sobre main, el resultado esperado es ROJO ("falla antes"). Pasa a check
+# obligatorio recién cuando dé verde sobre la rama con los arreglos.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [audit/aislamiento-2orgs]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aislamiento-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aislamiento:
+    name: aislamiento (${{ matrix.proxy }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        proxy: [caddy, directo]
+    env:
+      E2E_PORT: "3000"
+      PROXY: ${{ matrix.proxy }}
+      AISLAMIENTO_BASE_URL: ${{ matrix.proxy == 'caddy' && 'http://localhost:8080' || 'http://localhost:3000' }}
+      AISLAMIENTO_OUT: aislamiento-out
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compilar la imagen del app (este commit)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: aislamiento/app:ci
+          cache-from: type=gha,scope=aislamiento-app
+          cache-to: type=gha,mode=max,scope=aislamiento-app
+
+      - name: Compilar la imagen del worker (este commit)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.worker
+          load: true
+          tags: aislamiento/worker:ci
+          cache-from: type=gha,scope=aislamiento-worker
+          cache-to: type=gha,mode=max,scope=aislamiento-worker
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql (lo mismo que aplica el install.sh)
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          IDS=$(docker ps -q --filter name=supabase_realtime)
+          [ -n "$IDS" ] || { echo "::error::Sin contenedor supabase_realtime"; exit 1; }
+          docker restart $IDS >/dev/null
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' $IDS 2>/dev/null)" = "healthy" ] && break
+            sleep 2
+          done
+
+      - name: Generar .env.e2e (guardas - solo Supabase local) y enmascarar claves
+        run: |
+          pnpm e2e:env
+          # Las claves del Supabase local son de un stack descartable, pero no
+          # salen al log igual: el repo es público.
+          for k in NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY CPF_ENCRYPTION_KEY WAHA_BYO_ENCRYPTION_KEY AI_CRED_AES_KEY; do
+            v="$(grep -E "^$k=" .env.e2e | cut -d= -f2-)"
+            [ -n "$v" ] && echo "::add-mask::$v"
+          done
+          # Producción: firma de WAHA NO exigida es el default de main (H5). Se
+          # mide el default, no se lo corrige acá.
+          echo "WAHA_WEBHOOK_BASE_URL=http://127.0.0.1:3000" >> .env.e2e
+          echo "WAHA_API_KEY_SHA512=$(printf '%s' 'e2e-placeholder-nao-e-segredo' | sha512sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Levantar redis, srh, waha, app, worker (y Caddy)
+        run: |
+          set -euo pipefail
+          docker network create aux
+          docker run -d --name redis --network aux redis:7-alpine redis-server --save "" --appendonly no
+          docker run -d --name srh --network aux -p 3998:80 \
+            -e SRH_MODE=env -e SRH_TOKEN=e2e-placeholder-nao-e-segredo \
+            -e SRH_CONNECTION_STRING=redis://redis:6379 \
+            hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+          docker run -d --name waha --network aux -p 3999:3000 \
+            --add-host host.docker.internal:host-gateway \
+            -e WAHA_API_KEY="sha512:${WAHA_API_KEY_SHA512}" \
+            -e WHATSAPP_HOOK_URL=http://host.docker.internal:3000/api/v1/webhooks/waha \
+            -e WHATSAPP_HOOK_EVENTS="message.any,message.ack,session.status" \
+            -e WHATSAPP_DEFAULT_ENGINE=NOWEB -e WAHA_DASHBOARD_ENABLED=false \
+            devlikeapro/waha:latest-2026.7.2
+          docker run -d --name app --network host --env-file .env.e2e \
+            -e PORT=3000 -e INTERNAL_AGENT_RUN_STUB=true -e SENTRY_DSN=off \
+            -e AUTH_RATE_LIMIT_LOGIN_IP=1000 \
+            aislamiento/app:ci
+          docker run -d --name worker --network host --env-file .env.e2e \
+            -e INTERNAL_AGENT_RUN_STUB=true -e SENTRY_DSN=off \
+            aislamiento/worker:ci
+          if [ "$PROXY" = "caddy" ]; then
+            # El Caddyfile de PRODUCCIÓN, sin tocar. DOMAIN con esquema http://
+            # apaga el TLS automático; `app` resuelve al host, donde escucha el app.
+            docker run -d --name caddy --network host --add-host app:127.0.0.1 \
+              -e DOMAIN=http://localhost:8080 -e ACME_EMAIL=ci@example.invalid \
+              -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine
+          fi
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null "$AISLAMIENTO_BASE_URL/login" && { echo "app arriba en ~$((i*3))s vía $AISLAMIENTO_BASE_URL"; exit 0; }
+            sleep 3
+          done
+          echo "::error::La app no respondió en 180 s"
+          docker logs --tail=80 app
+          [ "$PROXY" = "caddy" ] && docker logs --tail=40 caddy
+          exit 1
+
+      - name: IDs de las server actions (del manifest de la imagen)
+        run: |
+          mkdir -p "$AISLAMIENTO_OUT"
+          docker cp app:/app/.next/server/server-reference-manifest.json "$AISLAMIENTO_OUT/server-actions.json"
+          # Respaldo si el manifest no trae `exportedName`: los chunks del cliente
+          # llevan createServerReference("<id>", …, "<nombre>").
+          docker cp app:/app/.next/static/chunks "$RUNNER_TEMP/next-chunks"
+          echo "acciones en el manifest: $(jq '.node | length' "$AISLAMIENTO_OUT/server-actions.json")"
+
+      - name: Semilla de dos organizaciones (service role, solo Supabase local)
+        run: |
+          set -a; . ./.env.e2e; set +a
+          NEXT_CHUNKS_DIR="$RUNNER_TEMP/next-chunks" pnpm exec tsx scripts/seed-aislamiento.ts
+          # Tokens dsk_ y contraseñas generadas por la semilla: fuera del log.
+          jq -r '.secretos[]' "$AISLAMIENTO_OUT/seed.json" | while read -r s; do echo "::add-mask::$s"; done
+
+      - name: Prueba de dos organizaciones (PostgREST, API HTTP, MCP)
+        id: spec
+        continue-on-error: true
+        run: |
+          set -a; . ./.env.e2e; set +a
+          pnpm exec playwright test -c tests/aislamiento/playwright.config.ts
+
+      - name: Barrido final (canario y conteo de filas de B)
+        id: barrido
+        continue-on-error: true
+        run: |
+          set -a; . ./.env.e2e; set +a
+          pnpm exec tsx scripts/seed-aislamiento.ts barrido
+
+      - name: Resumen (tabla objetivo | esperado | obtenido)
+        if: always()
+        run: |
+          # La escribe el barrido (scripts/seed-aislamiento.ts barrido).
+          if [ -f "$AISLAMIENTO_OUT/tabla.md" ]; then cat "$AISLAMIENTO_OUT/tabla.md" >> "$GITHUB_STEP_SUMMARY"
+          else echo "**Tabla: NO MEDIDO** (el barrido no llegó a escribirla)." >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Logs de los contenedores
+        if: always()
+        run: |
+          mkdir -p "$AISLAMIENTO_OUT/logs"
+          for c in app worker waha srh redis caddy; do
+            docker logs "$c" > "$AISLAMIENTO_OUT/logs/$c.log" 2>&1 || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aislamiento-${{ matrix.proxy }}
+          path: |
+            aislamiento-out/
+            !aislamiento-out/seed.json
+          retention-days: 14
+
+      - name: Veredicto
+        if: always()
+        env:
+          SPEC: ${{ steps.spec.outcome }}
+          BARRIDO: ${{ steps.barrido.outcome }}
+        run: |
+          echo "spec=$SPEC barrido=$BARRIDO"
+          [ "$SPEC" = "success" ] && [ "$BARRIDO" = "success" ] || { echo "::error::Aislamiento entre orgs: ROJO ($PROXY)"; exit 1; }
