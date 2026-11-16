@@ -66,7 +66,7 @@ async function sembrarPii(x: Fixture, nombre: string, telefono: string, email: s
        status, body, media_url, media_mime, media_storage_path, error_message, metadata, external_id)
      values ($1, $2, $3, $4, $5, 'image', 'inbound', 'received', 'Hola, soy ' || $6 || ' y mi teléfono es +' || $7,
        'https://waha.test/api/files/' || $7 || '.jpg', 'image/jpeg', $8,
-       'falló con ' || $6, jsonb_build_object('pushName', $6::text), $7 || '@c.us_' || $1::text)`,
+       'falló con ' || $6, jsonb_build_object('pushName', $6::text), $7 || '@c.us_' || $8)`,
     [mensaje, x.org, x.conversation, x.channel, x.contact, nombre, telefono, `${x.org}/media/${mensaje}.jpg`],
   );
   await pool.query(
