@@ -76,13 +76,14 @@ describe("actions de admin exigen MFA probado (H3)", () => {
     expect(adminTocado).not.toHaveBeenCalled();
   });
 
+  type Agents = typeof import("@/app/app/ai/agents/_actions");
   const ID = "11111111-1111-4111-8111-111111111111";
   it.each([
-    ["pauseAgentAction", (m: any) => m.pauseAgentAction(ID)],
-    ["unpauseAgentAction", (m: any) => m.unpauseAgentAction(ID)],
-    ["archiveAgentAction", (m: any) => m.archiveAgentAction(ID)],
-    ["renameAgentAction", (m: any) => m.renameAgentAction(ID, "Nuevo")],
-    ["duplicateAgentAction", (m: any) => m.duplicateAgentAction(ID)],
+    ["pauseAgentAction", (m: Agents) => m.pauseAgentAction(ID)],
+    ["unpauseAgentAction", (m: Agents) => m.unpauseAgentAction(ID)],
+    ["archiveAgentAction", (m: Agents) => m.archiveAgentAction(ID)],
+    ["renameAgentAction", (m: Agents) => m.renameAgentAction(ID, "Nuevo")],
+    ["duplicateAgentAction", (m: Agents) => m.duplicateAgentAction(ID)],
   ])("⭐ %s", async (_n, call) => {
     const m = await import("@/app/app/ai/agents/_actions");
     expect(await call(m)).toMatchObject({ ok: false });
