@@ -43,7 +43,10 @@ function banco(tabelas: Record<string, Row[]>) {
         Promise.resolve(
           uriLen > LIMITE_URI
             ? { data: null, error: { message: "URI too long" } }
-            : { data: (tabelas[tabela] ?? []).filter((r) => filtros.every((f) => f(r))), error: null },
+            : {
+                data: (tabelas[tabela] ?? []).filter((r) => filtros.every((f) => f(r))),
+                error: null,
+              },
         ).then(ok, ko),
     };
     return q;
@@ -73,53 +76,53 @@ describe("GET /api/v1/pipelines/[id]/board com volume", () => {
   it.each([1, 300, 1000])(
     "com %i leads não monta URI com todos os ids: 200, todos os cards, com score e conversa",
     async (N) => {
-    const db = banco({
-      crm_pipelines: [{ id: PIPE, organization_id: ORG, is_default: true }],
-      crm_stages: [{ id: STAGE, pipeline_id: PIPE, is_archived: false, position: 1 }],
-      crm_leads: leads(N),
-      crm_lead_scores: leads(N).map((l) => ({
-        organization_id: ORG,
-        lead_id: l.id,
-        ai_probability: "0.5",
-        ai_probability_reason: "r",
-        ai_probability_band: "medium",
-        ai_probability_evidence: { factors: [] },
-        ai_probability_at: null,
-      })),
-      conversations: leads(N).flatMap((l, i) => [
-        {
-          id: uuid("d", i),
+      const db = banco({
+        crm_pipelines: [{ id: PIPE, organization_id: ORG, is_default: true }],
+        crm_stages: [{ id: STAGE, pipeline_id: PIPE, is_archived: false, position: 1 }],
+        crm_leads: leads(N),
+        crm_lead_scores: leads(N).map((l) => ({
           organization_id: ORG,
-          contact_id: l.contact_id,
-          last_message_preview: "velha",
-          last_message_at: "2026-01-01T00:00:00Z",
-          unread_count_for_assignee: 0,
-        },
-        {
-          id: uuid("e", i),
-          organization_id: ORG,
-          contact_id: l.contact_id,
-          last_message_preview: "nova",
-          last_message_at: "2026-02-01T00:00:00Z",
-          unread_count_for_assignee: 2,
-        },
-      ]),
-      lead_state: [],
-    });
-    vi.mocked(createClient).mockResolvedValue(db.client as never);
+          lead_id: l.id,
+          ai_probability: "0.5",
+          ai_probability_reason: "r",
+          ai_probability_band: "medium",
+          ai_probability_evidence: { factors: [] },
+          ai_probability_at: null,
+        })),
+        conversations: leads(N).flatMap((l, i) => [
+          {
+            id: uuid("d", i),
+            organization_id: ORG,
+            contact_id: l.contact_id,
+            last_message_preview: "velha",
+            last_message_at: "2026-01-01T00:00:00Z",
+            unread_count_for_assignee: 0,
+          },
+          {
+            id: uuid("e", i),
+            organization_id: ORG,
+            contact_id: l.contact_id,
+            last_message_preview: "nova",
+            last_message_at: "2026-02-01T00:00:00Z",
+            unread_count_for_assignee: 2,
+          },
+        ]),
+        lead_state: [],
+      });
+      vi.mocked(createClient).mockResolvedValue(db.client as never);
 
-    const { GET } = await import("./route");
-    const res = await GET({} as NextRequest, { params: Promise.resolve({ id: PIPE }) });
-    const corpo = (await res.json()) as { data: { leads: Row[] } };
+      const { GET } = await import("./route");
+      const res = await GET({} as NextRequest, { params: Promise.resolve({ id: PIPE }) });
+      const corpo = (await res.json()) as { data: { leads: Row[] } };
 
-    expect(res.status).toBe(200);
-    expect(corpo.data.leads).toHaveLength(N);
-    expect(corpo.data.leads.every((l) => l.score)).toBe(true);
-    // a conversa mais recente de cada contato, mesmo vinda de lotes distintos
-    expect(
-      corpo.data.leads.every((l) => (l.conversa as { preview: string }).preview === "nova"),
-    ).toBe(true);
-    expect(db.maiorIn.n).toBeLessThanOrEqual(100);
+      expect(res.status).toBe(200);
+      expect(corpo.data.leads).toHaveLength(N);
+      expect(corpo.data.leads.every((l) => l.score)).toBe(true);
+      // a conversa mais recente de cada contato, mesmo vinda de lotes distintos
+      expect(
+        corpo.data.leads.every((l) => (l.conversa as { preview: string }).preview === "nova"),
+      ).toBe(true);
+      expect(db.maiorIn.n).toBeLessThanOrEqual(100);
     },
   );
 });

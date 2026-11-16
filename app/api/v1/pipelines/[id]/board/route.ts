@@ -24,6 +24,7 @@ import {
   type PropostaAmbigua,
 } from "@/lib/leads/next-action";
 import type { LeadCandidate } from "@/lib/leads/active-lead";
+import { emLotes } from "@/lib/supabase/em-lotes";
 import { createClient } from "@/lib/supabase/server";
 import type { BoardData, Pipeline, Stage } from "@/lib/kanban/types";
 import type { Lead } from "@/lib/types/leads";
@@ -74,9 +75,7 @@ async function withOwnerAgents(
     published_version_id: string | null;
   }>;
 
-  const publishedIds = agentRows
-    .map((a) => a.published_version_id)
-    .filter((v): v is string => !!v);
+  const publishedIds = agentRows.map((a) => a.published_version_id).filter((v): v is string => !!v);
   const versionById = new Map<string, number>();
   if (publishedIds.length > 0) {
     const { data: versions, error: versionsErr } = await supabase
@@ -138,19 +137,18 @@ async function avisaAmbiguas(
 ): Promise<void> {
   if (ambiguas.length === 0) return;
 
-  const { data: jaAbertos } = await supabase
-    .from("agent_inbox_items")
-    .select("ref_id")
-    .eq("organization_id", organizationId)
-    .eq("kind", "next_action_ambiguous")
-    .eq("status", "open")
-    .in(
-      "ref_id",
-      ambiguas.map((a) => a.contact_id),
-    );
-  const abertos = new Set(
-    ((jaAbertos ?? []) as Array<{ ref_id: string }>).map((r) => r.ref_id),
+  const { data: jaAbertos } = await emLotes<{ ref_id: string }>(
+    ambiguas.map((a) => a.contact_id),
+    (lote) =>
+      supabase
+        .from("agent_inbox_items")
+        .select("ref_id")
+        .eq("organization_id", organizationId)
+        .eq("kind", "next_action_ambiguous")
+        .eq("status", "open")
+        .in("ref_id", lote),
   );
+  const abertos = new Set(jaAbertos.map((r) => r.ref_id));
 
   const novos = ambiguas
     .filter((a) => !abertos.has(a.contact_id))
@@ -187,27 +185,28 @@ async function withScores(
 ): Promise<{ leads: Lead[]; error: string | null }> {
   if (leads.length === 0) return { leads, error: null };
 
-  const { data, error } = await supabase
-    .from("crm_lead_scores")
-    .select(
-      "lead_id, ai_probability, ai_probability_reason, ai_probability_band, ai_probability_evidence, ai_probability_at",
-    )
-    .eq("organization_id", organizationId)
-    .in(
-      "lead_id",
-      leads.map((l) => l.id),
-    );
-  if (error) return { leads, error: error.message };
-
-  const porLead = new Map<string, NonNullable<Lead["score"]>>();
-  for (const row of (data ?? []) as Array<{
+  const { data, error } = await emLotes<{
     lead_id: string;
     ai_probability: number | string | null;
     ai_probability_reason: string | null;
     ai_probability_band: string | null;
     ai_probability_evidence: { factors?: unknown } | null;
     ai_probability_at: string | null;
-  }>) {
+  }>(
+    leads.map((l) => l.id),
+    (lote) =>
+      supabase
+        .from("crm_lead_scores")
+        .select(
+          "lead_id, ai_probability, ai_probability_reason, ai_probability_band, ai_probability_evidence, ai_probability_at",
+        )
+        .eq("organization_id", organizationId)
+        .in("lead_id", lote),
+  );
+  if (error) return { leads, error: error.message };
+
+  const porLead = new Map<string, NonNullable<Lead["score"]>>();
+  for (const row of data) {
     // `numeric` chega como string no supabase-js; `null` continua null — e a
     // diferença entre null e 0 é justamente o que não pode se perder aqui.
     if (row.ai_probability === null || row.ai_probability_band === null) continue;
@@ -253,22 +252,32 @@ async function withConversas(
   const contactIds = [...new Set(leads.map((l) => l.contact_id).filter((c): c is string => !!c))];
   if (contactIds.length === 0) return { leads, error: null };
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .select("id, contact_id, last_message_preview, last_message_at, unread_count_for_assignee")
-    .eq("organization_id", organizationId)
-    .in("contact_id", contactIds)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
-  if (error) return { leads, error: error.message };
-
-  const porContato = new Map<string, NonNullable<Lead["conversa"]>>();
-  for (const row of (data ?? []) as Array<{
+  const { data, error } = await emLotes<{
     id: string;
     contact_id: string;
     last_message_preview: string | null;
     last_message_at: string | null;
     unread_count_for_assignee: number | null;
-  }>) {
+  }>(contactIds, (lote) =>
+    supabase
+      .from("conversations")
+      .select("id, contact_id, last_message_preview, last_message_at, unread_count_for_assignee")
+      .eq("organization_id", organizationId)
+      .in("contact_id", lote)
+      .order("last_message_at", { ascending: false, nullsFirst: false }),
+  );
+  if (error) return { leads, error: error.message };
+  // Cada lote vem ordenado, a união não: reordena (ISO 8601 compara como texto;
+  // sem data vai para o fim, como `nullsFirst: false`).
+  data.sort((a, b) => {
+    if (a.last_message_at === b.last_message_at) return 0;
+    if (a.last_message_at === null) return 1;
+    if (b.last_message_at === null) return -1;
+    return a.last_message_at < b.last_message_at ? 1 : -1;
+  });
+
+  const porContato = new Map<string, NonNullable<Lead["conversa"]>>();
+  for (const row of data) {
     // Primeira vista vence: a consulta já veio ordenada por atividade.
     if (porContato.has(row.contact_id)) continue;
     porContato.set(row.contact_id, {
@@ -294,37 +303,35 @@ async function withNextActions(
   leads: Lead[],
   defaultPipelineId: string | null,
 ): Promise<{ leads: Lead[]; error: string | null }> {
-  const contactIds = [
-    ...new Set(leads.map((l) => l.contact_id).filter((c): c is string => !!c)),
-  ];
+  const contactIds = [...new Set(leads.map((l) => l.contact_id).filter((c): c is string => !!c))];
   if (contactIds.length === 0) return { leads, error: null };
 
   const [{ data: estados, error: estadosErr }, { data: candidatos, error: candErr }] =
     await Promise.all([
-      supabase
-        .from("lead_state")
-        .select("contact_id, next_action, next_action_seq, updated_at")
-        .eq("organization_id", organizationId)
-        .in("contact_id", contactIds)
-        .not("next_action", "is", null),
-      supabase
-        .from("crm_leads")
-        .select(
-          "id, organization_id, pipeline_id, status, last_activity_at, created_at, contact_id",
-        )
-        .eq("organization_id", organizationId)
-        .eq("status", "open")
-        .in("contact_id", contactIds),
+      emLotes<EstadoDoContato>(contactIds, (lote) =>
+        supabase
+          .from("lead_state")
+          .select("contact_id, next_action, next_action_seq, updated_at")
+          .eq("organization_id", organizationId)
+          .in("contact_id", lote)
+          .not("next_action", "is", null),
+      ),
+      emLotes<LeadCandidate & { contact_id: string | null }>(contactIds, (lote) =>
+        supabase
+          .from("crm_leads")
+          .select(
+            "id, organization_id, pipeline_id, status, last_activity_at, created_at, contact_id",
+          )
+          .eq("organization_id", organizationId)
+          .eq("status", "open")
+          .in("contact_id", lote),
+      ),
     ]);
   if (estadosErr) return { leads, error: estadosErr.message };
   if (candErr) return { leads, error: candErr.message };
-  if (!estados || estados.length === 0) return { leads, error: null };
+  if (estados.length === 0) return { leads, error: null };
 
-  const { porLead, ambiguas } = roteiaProximasAcoes(
-    estados as EstadoDoContato[],
-    (candidatos ?? []) as Array<LeadCandidate & { contact_id: string | null }>,
-    { defaultPipelineId },
-  );
+  const { porLead, ambiguas } = roteiaProximasAcoes(estados, candidatos, { defaultPipelineId });
 
   // Recusar o palpite não pode virar silêncio: a proposta que não achou dono vai
   // para a caixa, onde um humano desambigua. Escrever a partir de um GET não é
@@ -383,7 +390,8 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (pipelineErr) return fail("internal_error", pipelineErr.message, 500, { requestId });
   if (stagesErr) return fail("internal_error", stagesErr.message, 500, { requestId });
   if (leadsErr) return fail("internal_error", leadsErr.message, 500, { requestId });
-  if (!pipeline) return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
+  if (!pipeline)
+    return fail("resource_not_found", t("Pipeline não encontrado."), 404, { requestId });
 
   const leadsWithOwner = await withOwnerAgents(
     supabase,
