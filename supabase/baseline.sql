@@ -26994,6 +26994,48 @@ end $f$;
 -- EXECUTE sai das duas origens e dos papéis que o default ACL do Supabase alcança.
 revoke execute on function public.fn_aplicar_travas_de_suporte() from public, anon, authenticated, service_role;
 
+-- ---- media de mensaje: solo la escribe el servidor (migration 0291) ----
+-- C2/M1: el navegador no cambia `media_url` ni `media_storage_path`, ni crea un
+-- entrante con media, ni inserta un path fuera de `<org>/<conversación>/`. Trigger y no revoke por columna: con `GRANT ALL` de tabla
+-- el revoke de columna no tiene efecto. Detalle en la migration.
+create or replace function public.fn_messages_media_solo_servidor()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if tg_op = 'UPDATE'
+     and (new.media_url is distinct from old.media_url
+          or new.media_storage_path is distinct from old.media_storage_path) then
+    raise exception 'media_url y media_storage_path solo los escribe el servidor'
+      using errcode = '42501';
+  end if;
+  if tg_op = 'INSERT' and new.direction = 'inbound'
+     and (new.media_url is not null or new.media_storage_path is not null) then
+    raise exception 'un mensaje entrante con media solo lo crea el servidor'
+      using errcode = '42501';
+  end if;
+  if tg_op = 'INSERT' and new.media_storage_path is not null
+     and not starts_with(new.media_storage_path,
+                         new.organization_id::text || '/' || new.conversation_id::text || '/') then
+    raise exception 'media_storage_path fuera de la conversación'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_messages_media_solo_servidor() from public, anon, authenticated;
+
+drop trigger if exists trg_messages_media_solo_servidor on public.messages;
+create trigger trg_messages_media_solo_servidor
+  before insert or update on public.messages
+  for each row execute function public.fn_messages_media_solo_servidor();
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -27251,6 +27293,19 @@ create policy "capture_forms_manager_write" on public.capture_forms
   );
 
 notify pgrst, 'reload schema';
+-- ---- user_recovery_codes só com service role (migration 0277) ----
+-- Auditoria 2026-11-13, H1: com GRANT ALL a authenticated, uma sessão aal1 inseria
+-- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.
+revoke all on table public.user_recovery_codes from anon, authenticated;
+
+-- ---- api_tokens só se cria com MFA provada (migration 0278) ----
+-- Auditoria 2026-11-14, H1: admin aal1 inseria token persistente sem MFA.
+grant execute on function public.fn_session_mfa_proven() to authenticated;
+
+drop policy if exists api_tokens_insert_exige_mfa on public.api_tokens;
+create policy api_tokens_insert_exige_mfa on public.api_tokens
+  as restrictive for insert to authenticated
+  with check (public.fn_session_mfa_proven());
 
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --

@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 
 import { audit } from "@/lib/audit";
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdminWrite } from "@/lib/auth/requirePlatformAdmin";
 import { invalidarMarcaDaInstalacao } from "@/lib/branding/instalacao";
 import { normalizarHex } from "@/lib/branding/rampa";
 import { platformBrandingSchema, type PlatformBrandingInput } from "@/lib/schemas/settings";
@@ -77,7 +77,7 @@ export async function updateBranding(
     return { ok: false, error: "validation_failed", details: parsed.error.flatten() };
   }
 
-  const { user: authUser } = await requirePlatformAdmin();
+  const { user: authUser } = await requirePlatformAdminWrite();
 
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
