@@ -14,20 +14,19 @@
  *
  *  1. Assinatura presente que NÃO confere ⇒ rejeita. Sempre. Não existe motivo
  *     legítimo para alguém assinar errado, e era o buraco mais óbvio.
- *  2. `WAHA_WEBHOOK_REQUIRE_SIGNATURE=true` ⇒ exige assinatura válida em tudo.
- *     Fica desligado por padrão porque o WAHA **Core** não assina: medido nesta
- *     VPS (2026.7.2 CORE), os eventos reais chegam sem header algum mesmo com
- *     `WHATSAPP_HOOK_HMAC` configurado no contêiner. Ligar isso por default
- *     derrubaria a ingestão de mensagens de todo mundo — remédio pior que a
- *     doença. Quem roda WAHA Plus (ou um proxy que assina) liga e ganha a
- *     verificação forte.
+ *  2. Exigência ligada ⇒ assinatura válida em tudo. Liga por `requireSignature`
+ *     (a rota global passa `true` sempre: lá a org sai de `body.session`) ou por
+ *     `WAHA_WEBHOOK_REQUIRE_SIGNATURE=true`, que é o default em produção
+ *     (lib/env.ts). O "WAHA Core não assina" medido em 2026.7.2 era o compose
+ *     passando `WHATSAPP_HOOK_HMAC`, nome que o WAHA não lê: o certo é
+ *     `WHATSAPP_HOOK_HMAC_KEY` (src/modules/waha-webhook/webhook.config.ts do
+ *     devlikeapro/waha), e com ele o WAHA manda `X-Webhook-Hmac` sha512 hex.
  *  3. Sem assinatura e sem exigência ⇒ aceita, mas devolve `signatureVerified:
  *     false` — e quem chama grava ESSA verdade no log. Antes o log registrava
  *     `valid_signature = true` para evento não verificado.
  *
- * A defesa que não depende do WAHA saber assinar é de rede: a rota global (sem
- * token) deixa de ser publicada pelo Caddy, porque o WAHA fala com o app pela
- * rede interna do Docker e nunca precisou dela pela internet. Ver Caddyfile.
+ * O `respond 403` do Caddyfile para a rota global continua como segunda
+ * camada; a primeira agora é a app.
  */
 import { env } from "@/lib/env";
 
@@ -45,6 +44,8 @@ export interface WahaWebhookAuthInput {
   signatureHeader: string | null;
   /** Segredo por sessão já decifrado (null quando não há/não decifrou). */
   sessionSecret: string | null;
+  /** `true` exige assinatura válida mesmo com a flag de env desligada. */
+  requireSignature?: boolean;
 }
 
 export function authenticateWahaWebhook(input: WahaWebhookAuthInput): WahaWebhookAuth {
@@ -58,7 +59,7 @@ export function authenticateWahaWebhook(input: WahaWebhookAuthInput): WahaWebhoo
         ? envSecret
         : null;
 
-  const required = env.WAHA_WEBHOOK_REQUIRE_SIGNATURE === "true";
+  const required = input.requireSignature === true || env.WAHA_WEBHOOK_REQUIRE_SIGNATURE === "true";
 
   if (signatureHeader) {
     // Assinou: tem que conferir. Sem segredo para conferir, não há como

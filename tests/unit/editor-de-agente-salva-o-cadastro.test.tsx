@@ -68,6 +68,7 @@ vi.mock("@/app/app/ai/agents/[id]/_actions", () => ({
 // içado; o bloco 1 não as toca.
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({
+  mfaEmDivida: async () => false,
   loadAuthUser: vi.fn(async () => ({ id: "user-1", email: "u@example.com" })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, name: "Org", role: "admin" })),
 }));

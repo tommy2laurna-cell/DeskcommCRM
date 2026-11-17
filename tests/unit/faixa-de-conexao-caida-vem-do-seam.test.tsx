@@ -42,6 +42,7 @@ vi.mock("@/lib/channels/health", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => adminClient }));
 vi.mock("@/lib/auth/server", () => ({
+  mfaEmDivida: async () => false,
   loadAuthUser: async () => ({
     id: "user-1",
     idioma: "pt-BR",

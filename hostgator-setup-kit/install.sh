@@ -1693,10 +1693,10 @@ esac
   envq WACALLS_ADMIN_USER "$WACALLS_ADMIN_USER"
   envq WACALLS_ADMIN_PASSWORD "$WACALLS_ADMIN_PASSWORD"
   envq WACALLS_API_TOKEN "$WACALLS_API_TOKEN"
-  printf '# "true" exige assinatura em todo webhook do WAHA. O WAHA Core NÃO assina,\n'
-  printf '# então ligar isto sem um WAHA Plus (ou proxy que assine) para a ingestão\n'
-  printf '# de mensagens. A rota global já não é publicada na internet (ver Caddyfile).\n'
-  envq WAHA_WEBHOOK_REQUIRE_SIGNATURE "${WAHA_WEBHOOK_REQUIRE_SIGNATURE:-false}"
+  printf '# "true" exige assinatura em todo webhook do WAHA (também na rota /waha/<token>).\n'
+  printf '# O WAHA assina com WAHA_HMAC_SECRET (WHATSAPP_HOOK_HMAC_KEY no compose).\n'
+  printf '# A rota global exige assinatura sempre, com qualquer valor daqui.\n'
+  envq WAHA_WEBHOOK_REQUIRE_SIGNATURE "${WAHA_WEBHOOK_REQUIRE_SIGNATURE:-true}"
   printf '# Retoma as sessões já pareadas quando o contêiner do transporte reinicia.\n'
   printf '# Sem isto o número segue pareado no volume e MUDO até alguém abrir a tela\n'
   printf '# e clicar Reconectar — nada entra nem sai nesse meio-tempo.\n'

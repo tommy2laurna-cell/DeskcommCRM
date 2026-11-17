@@ -150,8 +150,8 @@ export type ChatIdentity =
  * NÃO protege: `"@".repeat(n) + "\n@lid"` passa por ele. Medido nesta função,
  * `String.replace` sendo síncrono (trava o event loop do processo inteiro, todos
  * os tenants): 64 KB de `from` custam ~2,9 s; 256 KB, ~48 s. A entrada é externa —
- * `payload.from` vem do corpo do webhook, e `WAHA_WEBHOOK_REQUIRE_SIGNATURE` é
- * `false` por padrão. Esta varredura é linear: 1 MB em 0,7 ms.
+ * `payload.from` vem do corpo do webhook, e em dev `WAHA_WEBHOOK_REQUIRE_SIGNATURE`
+ * é `false` por padrão. Esta varredura é linear: 1 MB em 0,7 ms.
  *
  * O que MUDOU desde que isto foi escrito: o corpo chegava por
  * `JSON.parse(rawBody) as WahaEnvelope` — cast, sem validação —, então `from`

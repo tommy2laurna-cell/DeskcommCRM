@@ -17,6 +17,11 @@ export function isMediaPathOwnedBy(path: string, orgId: string, conversationId: 
   return path.startsWith(`${orgId}/${conversationId}/`);
 }
 
+/** El objeto es de la organización (lo que la ruta de media puede firmar, M1). */
+export function isMediaPathOfOrg(path: string, orgId: string): boolean {
+  return path.startsWith(`${orgId}/`);
+}
+
 const DOCUMENT_MIMES = new Set([
   "application/pdf",
   "application/msword",
@@ -29,6 +34,18 @@ const DOCUMENT_MIMES = new Set([
   "text/csv",
   "application/zip",
 ]);
+
+/**
+ * Lo que `GET /api/v1/messages/[id]/media` sirve inline desde NUESTRO origen.
+ * El tipo sale del transporte o de `media_mime` (que escribe el cliente): un
+ * `text/html` o un SVG servido acá corre script con la cookie de sesión. Lo que
+ * no está en la lista se baja como adjunto `application/octet-stream`.
+ */
+export function esMimeServibleInline(mime: string): boolean {
+  const base = mime.split(";")[0]!.trim().toLowerCase();
+  if (base === "image/svg+xml") return false;
+  return /^(image|video|audio)\/[\w.+-]+$/.test(base) || DOCUMENT_MIMES.has(base);
+}
 
 type Ok = { ok: true; kind: MessageKind };
 type Fail = { ok: false; code: "unsupported_media_type" | "payload_too_large" | "validation_failed"; message: string };
