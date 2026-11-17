@@ -22,26 +22,31 @@ language sql stable
 set search_path = public
 as $$
   with
+  -- El vendedor ve solo lo suyo AUNQUE llame a la RPC directo con su JWT: el owner se fuerza acá,
+  -- no solo en la ruta. Dueño/gerente (manager+) eligen p_owner; el resto queda en auth.uid().
+  par as (
+    select case when public.fn_role_at_least(p_org, 'manager') then p_owner else auth.uid() end as o
+  ),
   nuevos as (
     select l.id, l.source, l.owner_user_id, l.status, l.stage_id, l.pipeline_id, s.position
     from public.crm_leads l
     join public.crm_stages s on s.id = l.stage_id
     where l.organization_id = p_org
       and l.created_at >= p_from and l.created_at < p_to
-      and (p_owner is null or l.owner_user_id = p_owner)
+      and ((select o from par) is null or l.owner_user_id = (select o from par))
   ),
   ganados as (
     select owner_user_id, value_cents, currency
     from public.crm_leads
     where organization_id = p_org and status = 'won'
       and closed_at >= p_from and closed_at < p_to
-      and (p_owner is null or owner_user_id = p_owner)
+      and ((select o from par) is null or owner_user_id = (select o from par))
   ),
   perdidos as (
     select owner_user_id from public.crm_leads
     where organization_id = p_org and status = 'lost'
       and closed_at >= p_from and closed_at < p_to
-      and (p_owner is null or owner_user_id = p_owner)
+      and ((select o from par) is null or owner_user_id = (select o from par))
   ),
   resp as (
     select c.assigned_to_user_id as user_id,
@@ -55,7 +60,7 @@ as $$
     ) fr
     where c.organization_id = p_org
       and c.assigned_to_user_id is not null
-      and (p_owner is null or c.assigned_to_user_id = p_owner)
+      and ((select o from par) is null or c.assigned_to_user_id = (select o from par))
       and fr.first_in is not null and fr.first_human_out is not null
       and fr.first_human_out > fr.first_in
       and fr.first_human_out >= p_from and fr.first_human_out < p_to
@@ -98,3 +103,6 @@ as $$
       from usuarios u), '[]'::jsonb)
   );
 $$;
+
+revoke execute on function public.fn_tablero_metrics(uuid, timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.fn_tablero_metrics(uuid, timestamptz, timestamptz, uuid) to authenticated, service_role;
