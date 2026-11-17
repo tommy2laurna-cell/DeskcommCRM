@@ -40,6 +40,12 @@ const SOURCE_OPTIONS = [
   // porta — e ela estava incompleta desde que a atribuição passou a existir.
   { value: "meta_ads", label: "Anúncio da Meta" },
   { value: "google_ads", label: "Anúncio do Google" },
+  // Entrada de prospectos por API (n8n): `contacts.source` es el origen que mandó
+  // la automatización; estos son los que la documentación recomienda.
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "formulario_web", label: "Formulário da web" },
+  { value: "api", label: "Automação (API)" },
 ];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
