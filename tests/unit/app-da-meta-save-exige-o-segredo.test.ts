@@ -43,6 +43,7 @@ const gravacoes: Record<string, unknown>[] = [];
 
 vi.mock("@/lib/auth/requirePlatformAdmin", () => ({
   requirePlatformAdmin: async () => ({ user: { id: USUARIO } }),
+  requirePlatformAdminWrite: async () => ({ user: { id: USUARIO } }),
 }));
 
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
