@@ -3,6 +3,7 @@
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { useT } from "@/hooks/i18n/useT";
+import { detallesDeOrigen } from "@/lib/captar/origen";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ShieldCheck, PencilSimple } from "@/lib/ui/icons";
@@ -162,6 +163,12 @@ export function ContactDetailClient({ contactId }: Props) {
                 <dt className="text-xs uppercase text-muted-foreground">{t("Origem")}</dt>
                 <dd className="mt-1">{contact.source}</dd>
               </div>
+              {detallesDeOrigen(contact.source_metadata).map(([rotulo, valor]) => (
+                <div key={rotulo}>
+                  <dt className="text-xs uppercase text-muted-foreground">{t(rotulo)}</dt>
+                  <dd className="mt-1" data-testid={`origen-${rotulo}`}>{valor}</dd>
+                </div>
+              ))}
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">{t("Última atividade")}</dt>
                 <dd className="mt-1">
