@@ -30,6 +30,9 @@ vi.mock("@/hooks/channels/useChannelSessions", () => ({
 vi.mock("@/hooks/inbox/useConversationTags", () => ({
   useConversationTagVocabulary: () => ({ data: [] }),
 }));
+vi.mock("@/hooks/team/useAttendants", () => ({
+  useAttendants: () => ({ data: undefined }),
+}));
 vi.mock("@/hooks/inbox/useConversationCounts", () => ({
   useConversationCounts: () => ({ data: { unassigned: 3, mine: 2, all: 5, closed: 1 } }),
 }));

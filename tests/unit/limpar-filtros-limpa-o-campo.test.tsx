@@ -43,6 +43,9 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("@/hooks/inbox/useConversationTags", () => ({
   useConversationTagVocabulary: () => ({ data: [] }),
 }));
+vi.mock("@/hooks/team/useAttendants", () => ({
+  useAttendants: () => ({ data: undefined }),
+}));
 vi.mock("@/hooks/inbox/useConversationCounts", () => ({
   useConversationCounts: () => ({ data: undefined }),
 }));

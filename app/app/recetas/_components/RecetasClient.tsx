@@ -1,4 +1,5 @@
 "use client";
+import { copyToClipboard } from "@/lib/clipboard";
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -144,7 +145,7 @@ function TarjetaDeReceta({
           {pideLink && (
             <label className="flex flex-col gap-1 text-sm">
               {t("Link de avaliação do Google")}
-              <Input value={link} placeholder="https://g.page/r/…" onChange={(e) => setLink(e.target.value)} />
+              <Input value={link} placeholder="https://…" onChange={(e) => setLink(e.target.value)} />
             </label>
           )}
 
@@ -186,15 +187,14 @@ function BloqueDePlantilla({ plantilla }: { plantilla: NonNullable<VistaDeReceta
         <dt className="text-muted-foreground">{t("Estado na Meta")}</dt>
         <dd data-testid={`plantilla-estado-${plantilla.nombre}`}>{estado}</dd>
       </dl>
-      <pre className="mt-2 whitespace-pre-wrap rounded border border-border bg-background p-2 text-xs">{plantilla.cuerpo}</pre>
+      <pre className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-background p-2 text-xs">{plantilla.cuerpo}</pre>
       <div className="mt-2 flex items-center gap-3">
         <Button
           variant="outline"
           size="sm"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(plantilla.cuerpo);
-              setCopiado(true);
+              setCopiado(await copyToClipboard(plantilla.cuerpo));
             } catch {
               setCopiado(false);
             }

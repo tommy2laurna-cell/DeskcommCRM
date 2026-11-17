@@ -3,6 +3,7 @@
  * pantalla, crear un turno, avanzar el reloj (`cron/recetas?ahora=`) y ver el
  * envío simulado (sin WhatsApp real: el mensaje queda registrado en la conversa).
  */
+import { execFileSync } from "node:child_process";
 import { randomInt, randomUUID } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
@@ -38,6 +39,11 @@ async function login(page: Page, email: string) {
 
 test.describe("recetas: recordatorio de turno 24 h", () => {
   test.setTimeout(180_000);
+
+  // La ventana de envío del rig la declara este seed (0h-24h): sin él la spec pasa de día y reprueba de noche.
+  test.beforeAll(() => {
+    execFileSync("npx", ["tsx", "scripts/seed-e2e-numero-conectado.ts"], { stdio: "inherit" });
+  });
 
   test("prender, crear un turno, avanzar el reloj y ver el envío", async ({ page, request }) => {
     const email = `recetas-${randomUUID()}@invariant.test`;
