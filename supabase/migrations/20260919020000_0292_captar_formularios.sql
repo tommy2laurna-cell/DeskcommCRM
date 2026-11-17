@@ -1,4 +1,4 @@
--- 0277 — captar fuera de WhatsApp: formularios y encuestas públicos.
+-- 0292 — captar fuera de WhatsApp: formularios y encuestas públicos.
 --
 -- Una fila = un formulario (o encuesta) que la persona publica como link propio
 -- o como snippet en la web del cliente. NO tiene tabla de envíos propia: al

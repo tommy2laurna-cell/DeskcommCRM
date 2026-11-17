@@ -27244,7 +27244,7 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
--- ---- formularios y encuestas publicos: capture_forms (migration 0277) ----
+-- ---- formularios y encuestas publicos: capture_forms (migration 0292) ----
 create table if not exists public.capture_forms (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,

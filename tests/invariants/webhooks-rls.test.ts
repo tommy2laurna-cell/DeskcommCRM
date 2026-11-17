@@ -128,7 +128,7 @@ describe("webhook_sources + automation_rules + automation_rule_runs — RLS (mig
   });
 });
 
-describe("capture_forms — RLS (migration 0277)", () => {
+describe("capture_forms — RLS (migration 0292)", () => {
   it("manager A crea un formulario en la org A; manager B no lo ve; manager A sí", () => {
     const creado = writeCountAs(
       GOV_MANAGER,

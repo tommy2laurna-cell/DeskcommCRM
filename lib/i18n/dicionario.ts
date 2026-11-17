@@ -9183,7 +9183,7 @@ export const DICIONARIO: Traducoes = {
   "o compromisso": { es: "la cita" },
   "Entendi": { es: "Entendido" },
   "e-mail do convidado inválido": { es: "correo del invitado no válido" },
-  // Captar (formularios, encuestas, QR) — migración 0277.
+  // Captar (formularios, encuestas, QR) — migración 0292.
   "A caixa de consentimento é obrigatória e a data em que a pessoa aceitou fica guardada.": { es: "La casilla de consentimiento es obligatoria y se guarda la fecha en que la persona aceptó." },
   "Abre o WhatsApp": { es: "Abre WhatsApp" },
   "Abre o formulário": { es: "Abre el formulario" },
