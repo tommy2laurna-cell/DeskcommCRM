@@ -19,6 +19,7 @@ import {
   renderReciboPdf,
   type DatosDelDocumento,
 } from "@/lib/presupuestos/pdf";
+import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -78,10 +79,10 @@ export async function GET(
   if (contactId) {
     const { data: c } = await supabase
       .from("contacts")
-      .select("display_name")
+      .select("name, display_name")
       .eq("id", contactId)
       .maybeSingle();
-    clienteNombre = (c as { display_name?: string | null } | null)?.display_name ?? null;
+    clienteNombre = nomeDoContato(c as { name?: string | null; display_name?: string | null } | null);
   }
   clienteNombre ??= (lead as { title?: string } | null)?.title ?? null;
 

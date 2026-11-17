@@ -31,6 +31,7 @@ export default async function PuntajeSettingsPage() {
     supabase
       .from("crm_stages")
       .select("id, name, position, crm_pipelines!inner(name, is_archived, organization_id)")
+      .eq("organization_id", activeOrg.orgId)
       .eq("crm_pipelines.organization_id", activeOrg.orgId)
       .eq("crm_pipelines.is_archived", false)
       .order("position"),

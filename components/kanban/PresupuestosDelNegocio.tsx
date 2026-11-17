@@ -196,8 +196,8 @@ export function PresupuestosDelNegocio({ leadId, pipelineId }: { leadId: string;
           <div className="flex gap-2">
             <Button
               type="button"
-              disabled={crear.isPending || lineas.length === 0 || lineas.some((l) => !l.producto_id)}
               onClick={() => crear.mutate()}
+              disabled={crear.isPending || lineas.length === 0 || lineas.some((l) => !l.producto_id)}
             >
               {t("Emitir presupuesto")}
             </Button>
