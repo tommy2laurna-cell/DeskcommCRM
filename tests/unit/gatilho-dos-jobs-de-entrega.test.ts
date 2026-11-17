@@ -126,6 +126,10 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // --- os outros checks obrigatórios ------------------------------------------
   // Mesmo mecanismo, mesmo desfecho: `skipped` conta como check satisfeito.
   // Desligar qualquer um destes faz o PR entrar sem ter sido testado.
+  "tablero.yml::tablero": {
+    condicao: null,
+    efeito: "Prueba de integración del tablero (números contra la base) y del journey a 390 px; sin ella el tablero queda sin medir.",
+  },
   "captar.yml::captar": {
     condicao: null,
     efeito: "Journey de Captar (formulario publico -> contacto con origen); sin el, la captacion fuera de WhatsApp queda sin medir.",
