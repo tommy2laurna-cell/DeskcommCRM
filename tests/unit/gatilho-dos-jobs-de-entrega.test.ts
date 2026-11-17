@@ -149,6 +149,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // primeira major que reprovasse CANCELARIA a outra, e o relatório diria
   // `cancelled` em vez de medir as duas — cobertura declarada que o CI cancela é
   // o modo de falha que a #454 fecha.
+  "operacion.yml::restauracion": {
+    condicao: null,
+    efeito:
+      "Prova que um backup cifrado se RESTAURA de verdade (dump -> rclone -> base nova -> contagens). " +
+      "Pulado, o verde deixa de dizer que os backups do cliente se leem.",
+  },
   "ci.yml::invariants-majors": {
     condicao: null,
     efeito:
