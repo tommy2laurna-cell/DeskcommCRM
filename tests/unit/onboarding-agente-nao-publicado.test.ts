@@ -60,6 +60,14 @@ vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(async () => ({ id: USER, email: "dono@qa.local", full_name: "Dono" })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, name: "QA", role: "admin" })),
 }));
+// O onboarding exige admin real (C1): o gate é `requireRole`, mockeado como admin.
+vi.mock("@/lib/auth/require-role", () => ({
+  requireRole: vi.fn(async () => ({
+    ok: true,
+    user: { id: USER, email: "dono@qa.local", full_name: "Dono", support: null },
+    org: { orgId: ORG, name: "QA", role: "admin" },
+  })),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => clienteFalso() }));
 
 import { createDefaultAgent, type CreateAgentResult } from "@/app/actions/onboarding/createDefaultAgent";

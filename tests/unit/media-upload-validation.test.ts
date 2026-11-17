@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateOutboundMedia } from "@/lib/messaging/media/upload-validation";
+import { esMimeServibleInline, validateOutboundMedia } from "@/lib/messaging/media/upload-validation";
 
 describe("validateOutboundMedia", () => {
   it("classifica mimes suportados no kind certo", () => {
@@ -27,4 +27,15 @@ describe("validateOutboundMedia", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("validation_failed");
   });
+});
+
+describe("esMimeServibleInline (allowlist del proxy de media, C2)", () => {
+  it.each(["text/html", "image/svg+xml", "IMAGE/SVG+XML; charset=utf-8", "application/javascript", "application/xhtml+xml", "", "image/"])(
+    "⭐ %j no se sirve inline",
+    (mime) => expect(esMimeServibleInline(mime)).toBe(false),
+  );
+  it.each(["image/jpeg", "image/webp", "video/mp4", "audio/ogg; codecs=opus", "application/pdf", "text/plain"])(
+    "par de vacuidad: %j sí",
+    (mime) => expect(esMimeServibleInline(mime)).toBe(true),
+  );
 });

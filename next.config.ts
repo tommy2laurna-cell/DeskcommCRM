@@ -120,7 +120,7 @@ const nextConfig: NextConfig = {
 };
 
 // SENTRY_DSN=off apaga a telemetria também no build: sem plugin, sem upload de
-// source maps e sem a rota de túnel /monitoring. A organização e o projeto do
+// source maps. A organização e o projeto do
 // Sentry vêm do ambiente de quem instala; nada do autor fica no código.
 const sentryApagado = process.env.SENTRY_DSN === "off";
 
@@ -140,12 +140,6 @@ export default sentryApagado ? nextConfig : withSentryConfig(nextConfig, {
 
   // Upload a larger set of source maps for prettier stack traces (increases build time)
   widenClientFileUpload: true,
-
-  // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
-  // This can increase your server load as well as your hosting bill.
-  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-  // side errors will fail.
-  tunnelRoute: "/monitoring",
 
   webpack: {
     // Herança do wizard do Sentry (instrumentação automática de cron monitors).

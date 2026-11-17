@@ -185,7 +185,9 @@ export const wahaAdapter: ChannelAdapter = {
     // Devolve o objeto INTEIRO, sem remontar campo a campo: `FetchedMedia` é o
     // mesmo tipo dos dois lados, e reconstruí-lo faria a próxima adição de
     // campo sumir em silêncio aqui no meio.
-    return fetchWahaMedia(input.url, input.hintMime ?? null);
+    // La sesión del path tiene que ser la del mensaje (C2): sin esto, un miembro
+    // de A bajaba `/api/files/<sesión de B>/…` con la API key global.
+    return fetchWahaMedia(input.url, input.hintMime ?? null, input.sessionRef);
   },
 
   async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null }> {
