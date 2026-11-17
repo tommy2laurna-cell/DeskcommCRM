@@ -254,8 +254,8 @@ beforeAll(() => {
             values (v_org, false);
         end if;
 
-        -- review_requests (0277), smart_lists / campaigns / campaign_recipients
-        -- (0278/0279): a reseña pedida, os filtros guardados, a campanha e os
+        -- review_requests (0293), smart_lists / campaigns / campaign_recipients
+        -- (0294/0295): a reseña pedida, os filtros guardados, a campanha e os
         -- destinatarios dela (guardam quem recebe uma mensagem de marketing).
         -- (sem crase nesta prosa: o bloco inteiro é um template literal de JS.)
         if not exists (select 1 from public.review_requests where organization_id = v_org) then
@@ -368,7 +368,7 @@ export const TABLES = [
   // positivo. O SELECT de `authenticated` é por COLUNA, sem as colunas cifradas:
   // a contagem abaixo usa só `organization_id` e mede o que um membro enxerga.
   "ai_provider_credentials",
-  // 0277/0278/0279 — reseñas, listas inteligentes y campañas. Os destinatários guardam
+  // 0293/0294/0295 — reseñas, listas inteligentes y campañas. Os destinatários guardam
   // quem recebe uma mensagem de marketing; vazar entre tenants entregaria a base do vizinho.
   "review_requests",
   "smart_lists",

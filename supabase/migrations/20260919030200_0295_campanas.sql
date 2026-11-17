@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0279 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
+-- 0295 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
 --
 -- `campaigns` guarda el borrador y el estado; `campaign_recipients` es UNA fila
 -- por (campaña, contacto), materializada al confirmar. El `unique` es lo que

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0278 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
+-- 0294 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
 --
 -- Una lista inteligente guarda los FILTROS (etiqueta, etapa, origen, puntaje,
 -- último contacto, cumpleaños del mes), nunca la lista de contactos. La

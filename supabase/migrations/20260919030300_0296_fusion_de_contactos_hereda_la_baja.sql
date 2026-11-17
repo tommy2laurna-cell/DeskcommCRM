@@ -1,4 +1,4 @@
--- 0280_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
+-- 0296_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
 --
 -- Fusionar dos contactos NO heredaba la baja: un duplicado que pidió «BAJA» (is_blocked y
 -- consent.marketing.declined_at), fusionado en uno sin baja, dejaba al sobreviviente apto y

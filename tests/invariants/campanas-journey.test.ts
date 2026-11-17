@@ -14,7 +14,7 @@ import { sql } from "./gov-helpers";
  * registrado antes de confirmar, ni por haberla registrado DESPUÉS.
  *
  * Lo que corre de verdad: `fn_smart_list_contacts`, las tablas y constraints de
- * 0278/0279, `recorrerLista`, `clasificarContacto` (las mismas funciones que usa la
+ * 0294/0295, `recorrerLista`, `clasificarContacto` (las mismas funciones que usa la
  * ruta `confirm`) y `procesarLote`. Lo único falso es (a) el envío, que anota los
  * teléfonos en vez de llamar a Meta, y (b) el cliente, un traductor mínimo de la
  * API de PostgREST a SQL (mismo método que `webhooks-bulk-events.test.ts`).

@@ -2,7 +2,7 @@
  * LISTAS INTELIGENTES — traduce los filtros guardados a la consulta de Supabase.
  *
  * La lista guarda FILTROS, no contactos: la membresía se recalcula en cada
- * lectura con `fn_smart_list_contacts` (migración 0278). Este módulo es la parte
+ * lectura con `fn_smart_list_contacts` (migración 0294). Este módulo es la parte
  * pura — validar el jsonb y convertirlo en los argumentos de la función — más un
  * lector paginado por keyset (`id > cursor`), que mantiene la URL del request del
  * mismo tamaño aunque la lista tenga miles de contactos.

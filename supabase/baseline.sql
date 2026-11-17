@@ -26994,9 +26994,9 @@ end $f$;
 -- EXECUTE sai das duas origens e dos papéis que o default ACL do Supabase alcança.
 revoke execute on function public.fn_aplicar_travas_de_suporte() from public, anon, authenticated, service_role;
 
--- ---- listas inteligentes (migration 0278) ----
+-- ---- listas inteligentes (migration 0294) ----
 -- ============================================================================
--- 0278 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
+-- 0294 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
 --
 -- Una lista inteligente guarda los FILTROS (etiqueta, etapa, origen, puntaje,
 -- último contacto, cumpleaños del mes), nunca la lista de contactos. La
@@ -27108,9 +27108,9 @@ grant execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], te
 do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
 
 
--- ---- campañas y tarifa de Meta (migration 0279) ----
+-- ---- campañas y tarifa de Meta (migration 0295) ----
 -- ============================================================================
--- 0279 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
+-- 0295 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
 --
 -- `campaigns` guarda el borrador y el estado; `campaign_recipients` es UNA fila
 -- por (campaña, contacto), materializada al confirmar. El `unique` es lo que
@@ -27513,7 +27513,7 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
--- ---- reseñas después de ganar y «lo recomendó» (migration 0277) ----
+-- ---- reseñas después de ganar y «lo recomendó» (migration 0293) ----
 create table if not exists public.review_requests (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -27564,8 +27564,8 @@ create policy api_tokens_insert_exige_mfa on public.api_tokens
   as restrictive for insert to authenticated
   with check (public.fn_session_mfa_proven());
 
--- ---- la fusión de contactos hereda la baja (migration 0280) ----
--- 0280_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
+-- ---- la fusión de contactos hereda la baja (migration 0296) ----
+-- 0296_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
 --
 -- Fusionar dos contactos NO heredaba la baja: un duplicado que pidió «BAJA» (is_blocked y
 -- consent.marketing.declined_at), fusionado en uno sin baja, dejaba al sobreviviente apto y

@@ -9181,7 +9181,7 @@ export const DICIONARIO: Traducoes = {
   "A remarcação não foi aceita — o compromisso voltou para {data}.": { es: "No se aceptó el cambio de horario — la cita volvió al {data}." },
   "Não dá para remarcar para esse horário — {motivo}.": { es: "No se puede reprogramar para ese horario — {motivo}." },
   "o compromisso": { es: "la cita" },
-  // Reseñas, referidos y reactivación (migration 0277).
+  // Reseñas, referidos y reactivación (migration 0293).
   "Avaliações": { es: "Reseñas" },
   "Alguns dias depois de ganhar um negócio, o sistema envia ao cliente o link para deixar uma avaliação no Google, com uma mensagem aprovada da Meta.": { es: "Unos días después de ganar un negocio, el sistema le manda al cliente el link para dejarte una reseña en Google, con un mensaje aprobado de Meta." },
   "Avaliações salvas.": { es: "Reseñas guardadas." },
@@ -9208,7 +9208,7 @@ export const DICIONARIO: Traducoes = {
   "O link de avaliações do Google que o cliente recebe alguns dias depois de fechar.": { es: "El link de reseñas de Google que recibe el cliente unos días después de cerrar." },
   "Entendi": { es: "Entendido" },
   "e-mail do convidado inválido": { es: "correo del invitado no válido" },
-  // Listas inteligentes y campañas (migraciones 0278/0279).
+  // Listas inteligentes y campañas (migraciones 0294/0295).
   "Listas inteligentes": { es: "Listas inteligentes" },
   "Grupos de contatos que se atualizam sozinhos: a lista guarda os filtros, não as pessoas.": { es: "Grupos de contactos que se actualizan solos: la lista guarda los filtros, no las personas." },
   "Grupos de contatos que se atualizam sozinhos, por etiqueta, etapa, origem ou aniversário.": { es: "Grupos de contactos que se actualizan solos, por etiqueta, etapa, origen o cumpleaños." },
