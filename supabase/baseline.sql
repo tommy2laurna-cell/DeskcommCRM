@@ -27305,6 +27305,99 @@ create trigger trg_messages_media_solo_servidor
   before insert or update on public.messages
   for each row execute function public.fn_messages_media_solo_servidor();
 
+-- ---- reseñas después de ganar y «lo recomendó» (migration 0293) ----
+create table if not exists public.review_requests (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  due_at timestamptz not null,
+  sent_at timestamptz,
+  status text not null default 'pendiente'
+    check (status in ('pendiente', 'enviado', 'sin_configurar', 'omitido', 'fallido')),
+  error text,
+  created_at timestamptz not null default now(),
+  constraint review_requests_lead_id_key unique (lead_id)
+);
+
+create index if not exists review_requests_org_status_due_idx
+  on public.review_requests (organization_id, status, due_at);
+
+alter table public.review_requests enable row level security;
+
+drop policy if exists review_requests_select on public.review_requests;
+create policy review_requests_select on public.review_requests
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+revoke all on public.review_requests from anon;
+
+alter table public.contacts
+  add column if not exists referred_by_contact_id uuid
+  references public.contacts(id) on delete set null;
+
+create index if not exists contacts_referred_by_idx
+  on public.contacts (organization_id, referred_by_contact_id)
+  where referred_by_contact_id is not null;
+
+-- ---- la fusión de contactos hereda la baja (migration 0296) ----
+-- 0296_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
+--
+-- Fusionar dos contactos NO heredaba la baja: un duplicado que pidió «BAJA» (is_blocked y
+-- consent.marketing.declined_at), fusionado en uno sin baja, dejaba al sobreviviente apto y
+-- recibía marketing masivo. Regla: la baja gana. Se hace con un trigger sobre la lápide
+-- (is_merged_into pasa de null a un id) para que valga en TODO camino de fusión, no solo
+-- en fn_mesclar_contatos.
+--  * is_blocked  = el del principal OR el del absorbido.
+--  * declined_at = la más reciente de las dos (si alguna existe).
+-- `consent` NO se hereda en lo demás: un granted_at ajeno fabricaría consentimiento.
+create or replace function public.fn_fusion_hereda_la_baja()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_baja text;
+begin
+  if old.is_merged_into is not null or new.is_merged_into is null then
+    return new;
+  end if;
+
+  v_baja := new.consent #>> '{marketing,declined_at}';
+
+  update public.contacts p
+     set is_blocked = p.is_blocked or new.is_blocked,
+         consent = case
+           when v_baja is null then p.consent
+           when (p.consent #>> '{marketing,declined_at}') is not null
+                and (p.consent #>> '{marketing,declined_at}')::timestamptz >= v_baja::timestamptz
+             then p.consent
+           else jsonb_set(
+                  coalesce(p.consent, '{}'::jsonb),
+                  '{marketing}',
+                  coalesce(p.consent -> 'marketing', '{}'::jsonb) || jsonb_build_object('declined_at', v_baja),
+                  true)
+         end
+   where p.id = new.is_merged_into
+     and p.organization_id = new.organization_id
+     and (
+       (new.is_blocked and not p.is_blocked)
+       or (v_baja is not null)
+     );
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_fusion_hereda_la_baja on public.contacts;
+create trigger trg_fusion_hereda_la_baja
+  after update of is_merged_into on public.contacts
+  for each row execute function public.fn_fusion_hereda_la_baja();
+
+revoke execute on function public.fn_fusion_hereda_la_baja() from public, anon, authenticated;
+
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -27513,43 +27606,6 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
--- ---- reseñas después de ganar y «lo recomendó» (migration 0293) ----
-create table if not exists public.review_requests (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  lead_id uuid not null references public.crm_leads(id) on delete cascade,
-  contact_id uuid not null references public.contacts(id) on delete cascade,
-  due_at timestamptz not null,
-  sent_at timestamptz,
-  status text not null default 'pendiente'
-    check (status in ('pendiente', 'enviado', 'sin_configurar', 'omitido', 'fallido')),
-  error text,
-  created_at timestamptz not null default now(),
-  constraint review_requests_lead_id_key unique (lead_id)
-);
-
-create index if not exists review_requests_org_status_due_idx
-  on public.review_requests (organization_id, status, due_at);
-
-alter table public.review_requests enable row level security;
-
-drop policy if exists review_requests_select on public.review_requests;
-create policy review_requests_select on public.review_requests
-  for select using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin()
-  );
-
-revoke all on public.review_requests from anon;
-
-alter table public.contacts
-  add column if not exists referred_by_contact_id uuid
-  references public.contacts(id) on delete set null;
-
-create index if not exists contacts_referred_by_idx
-  on public.contacts (organization_id, referred_by_contact_id)
-  where referred_by_contact_id is not null;
-
 -- ---- user_recovery_codes só com service role (migration 0277) ----
 -- Auditoria 2026-11-13, H1: com GRANT ALL a authenticated, uma sessão aal1 inseria
 -- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.
@@ -27563,62 +27619,6 @@ drop policy if exists api_tokens_insert_exige_mfa on public.api_tokens;
 create policy api_tokens_insert_exige_mfa on public.api_tokens
   as restrictive for insert to authenticated
   with check (public.fn_session_mfa_proven());
-
--- ---- la fusión de contactos hereda la baja (migration 0296) ----
--- 0296_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
---
--- Fusionar dos contactos NO heredaba la baja: un duplicado que pidió «BAJA» (is_blocked y
--- consent.marketing.declined_at), fusionado en uno sin baja, dejaba al sobreviviente apto y
--- recibía marketing masivo. Regla: la baja gana. Se hace con un trigger sobre la lápide
--- (is_merged_into pasa de null a un id) para que valga en TODO camino de fusión, no solo
--- en fn_mesclar_contatos.
---  * is_blocked  = el del principal OR el del absorbido.
---  * declined_at = la más reciente de las dos (si alguna existe).
--- `consent` NO se hereda en lo demás: un granted_at ajeno fabricaría consentimiento.
-create or replace function public.fn_fusion_hereda_la_baja()
-returns trigger
-language plpgsql
-set search_path = ''
-as $$
-declare
-  v_baja text;
-begin
-  if old.is_merged_into is not null or new.is_merged_into is null then
-    return new;
-  end if;
-
-  v_baja := new.consent #>> '{marketing,declined_at}';
-
-  update public.contacts p
-     set is_blocked = p.is_blocked or new.is_blocked,
-         consent = case
-           when v_baja is null then p.consent
-           when (p.consent #>> '{marketing,declined_at}') is not null
-                and (p.consent #>> '{marketing,declined_at}')::timestamptz >= v_baja::timestamptz
-             then p.consent
-           else jsonb_set(
-                  coalesce(p.consent, '{}'::jsonb),
-                  '{marketing}',
-                  coalesce(p.consent -> 'marketing', '{}'::jsonb) || jsonb_build_object('declined_at', v_baja),
-                  true)
-         end
-   where p.id = new.is_merged_into
-     and p.organization_id = new.organization_id
-     and (
-       (new.is_blocked and not p.is_blocked)
-       or (v_baja is not null)
-     );
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_fusion_hereda_la_baja on public.contacts;
-create trigger trg_fusion_hereda_la_baja
-  after update of is_merged_into on public.contacts
-  for each row execute function public.fn_fusion_hereda_la_baja();
-
-revoke execute on function public.fn_fusion_hereda_la_baja() from public, anon, authenticated;
-
 
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
