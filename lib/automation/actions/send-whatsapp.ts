@@ -12,9 +12,18 @@ import { checarGuardasDeContato } from "@/lib/automation/guarda-do-contato";
 import { estadoDaJanela } from "@/lib/channels/janela";
 import { montarMensajeDeReceta, type MetaTemplateDeRegla } from "@/lib/automation/mensaje-de-receta";
 
+/**
+ * El aviso de un turno (`appointment.reminder`) habla del propio turno: la
+ * protección de agenda, que frena cobros y seguimientos mientras la persona
+ * tiene un turno vivo, no le corresponde. Sin esta excepción las recetas de
+ * recordatorio (24 h / 2 h) quedaban adiadas hasta el inicio del turno y nunca
+ * salían — el turno vivo es justamente lo que las dispara.
+ */
+const esAvisoDelTurno = (ctx: ActionCtx) => ctx.event.event_type === "appointment.reminder";
+
 async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): Promise<string | null> {
   const contato = checarGuardasDeContato(ctx);
-  if (contato.ok) {
+  if (contato.ok && !esAvisoDelTurno(ctx)) {
     const protection = (await protecaoAgendaSupabase(ctx.admin, ctx.organizationId, [contato.contact.id])).get(contato.contact.id)!;
     if (protection.motivo === "leitura_indisponivel") throw new Error("agenda_read_failed");
     if (protection.adiar) return protection.reavaliar_em;
@@ -46,7 +55,9 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
   // O espaçamento é COMPARTILHADO com a ação de IA (mesmo número, mesmo
   // contador) — ver lib/automation/throttle.ts.
   try {
-    await assertAgendaEffectSupabase(ctx.admin, { organizationId: ctx.organizationId, contactId: contact.id });
+    if (!esAvisoDelTurno(ctx)) {
+      await assertAgendaEffectSupabase(ctx.admin, { organizationId: ctx.organizationId, contactId: contact.id });
+    }
     const boundary = await serviceForAutomation(ctx, contact.id, sessionId);
     const conversationId = boundary.conversation_id;
     await espacarEnvio(sessionId);
@@ -78,7 +89,8 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
       {
         organization_id: ctx.organizationId,
         serviceBoundary: boundary,
-        proactiveContext: { organizationId: ctx.organizationId, contactId: contact.id },
+        // Sin contexto proactivo en el aviso del turno: ese contexto solo existe para la protección de agenda.
+        proactiveContext: esAvisoDelTurno(ctx) ? undefined : { organizationId: ctx.organizationId, contactId: contact.id },
         actor: { type: "webhook_source", id: ctx.ruleId },
         requestId: `rule:${ctx.ruleId}`,
       },
