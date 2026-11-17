@@ -103,6 +103,10 @@ jobs:
           # WAHA exige el hash SHA-512 de la clave. La clave es un placeholder de CI, no un secreto.
           echo "WAHA_API_KEY_SHA512=$(printf '%s' 'e2e-placeholder-nao-e-segredo' | sha512sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "WAHA_WEBHOOK_BASE_URL=http://host.docker.internal:3000" >> .env.e2e
+          # La imagen exige firma en el webhook de WAHA: la app y la spec comparten este secreto de CI.
+          HMAC="$(openssl rand -hex 16)"
+          echo "WAHA_HMAC_SECRET=$HMAC" >> .env.e2e
+          echo "WAHA_HMAC_SECRET=$HMAC" >> "$GITHUB_ENV"
 
       - name: Bajar las imágenes
         run: docker compose -f .github/humo/compose.yml --profile waha pull
