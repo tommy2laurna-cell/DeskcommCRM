@@ -20,7 +20,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as BaseDeDatos } from "node:sqlite";
+
+// getBuiltinModule: vitest/vite no sabe empaquetar `node:sqlite` con un import estático.
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+type DatabaseSync = BaseDeDatos;
 
 export const MIGRACIONES = path.join(process.cwd(), "lrn/fixtures/base-migraciones");
 export const SIN_CONTACTO = "(Sin contacto)";

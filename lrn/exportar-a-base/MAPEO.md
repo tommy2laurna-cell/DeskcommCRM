@@ -28,7 +28,7 @@ Es el inverso de `lrn/importar-base/MAPEO.md`. Solo lee del Conectado. Idempoten
 | `lead_notes` (otras) | `toque` tipo `nota` | `texto` = titular + cuerpo |
 | `crm_tasks` | `toque` tipo `tarea` | `vence` = día de `due_date` (UTC); sin fecha → día de creación + aviso. `done` → `hecho`. El marcador `base:t<id>` de `description` no se exporta |
 | `crm_tasks` cancelada | No viaja (CSV) | El Base no tiene tarea cancelada |
-| `platform_branding` app_name, accent_hex, logo | `marca.json` + `logo.png` | `negocio`, `colores.acento`, etapas del embudo principal, motivos de pérdida y moneda más usada. Logo solo si es PNG. Sin nombre de marca no se genera |
+| `platform_branding` app_name, accent_hex, logo | `marca.json` + el logo en PNG | `negocio`, `colores.acento`, etapas del embudo principal, motivos de pérdida y moneda más usada. Logo solo si es PNG. Sin nombre de marca no se genera |
 
 Abierto: el archivo trae `_sqlx_migrations` con el checksum SHA-384 de cada migración, como lo deja la app, para que el Base no migre de cero. `--verificar <crm.db>` repite lo que hace `src-tauri/src/migraciones.rs` (checksums, `VERSION_FUTURA`, `quick_check`) más `integrity_check` y `foreign_key_check`. Es una reproducción en TypeScript: el runner real es Rust/sqlx y no corre en este CI.
 

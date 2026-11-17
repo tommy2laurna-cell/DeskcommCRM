@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as BaseDeDatos } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +15,10 @@ import {
   verificarComoBase,
   type Origen,
 } from "../../lrn/scripts/exportar-a-base";
+
+// getBuiltinModule: vitest/vite no sabe empaquetar `node:sqlite` con un import estático.
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+type DatabaseSync = BaseDeDatos;
 
 const T = (d: string) => `2026-10-${d}:00+00:00`;
 
