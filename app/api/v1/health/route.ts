@@ -39,7 +39,8 @@ type MotivoDeFalha =
   | "credencial_recusada"
   | "resposta_inesperada"
   | "nao_configurado"
-  | "configuracao_invalida";
+  | "configuracao_invalida"
+  | "proyecto_pausado";
 
 type Check = {
   status: CheckStatus;
@@ -63,6 +64,9 @@ async function withTimeout<T>(p: Promise<T>, ms = TIMEOUT_MS): Promise<T> {
 
 /** Chegamos ao serviço, ele respondeu, e a resposta não serve. */
 function motivoDoStatusHttp(status: number): MotivoDeFalha {
+  // 540 = "project paused" (Supabase free pausa por inactividad):
+  // https://supabase.com/docs/guides/troubleshooting/http-status-codes
+  if (status === 540) return "proyecto_pausado";
   return status === 401 || status === 403 ? "credencial_recusada" : "resposta_inesperada";
 }
 

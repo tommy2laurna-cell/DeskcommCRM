@@ -1,0 +1,76 @@
+# Stack del "humo": imágenes PUBLICADAS en GHCR (no se compila nada) contra el
+# Supabase local de la CLI. app/worker/scheduler van en la red del host para
+# compartir 127.0.0.1 con Supabase y con el navegador de Playwright (la URL de
+# Supabase es la misma para el servidor y para el browser). redis/srh/waha van
+# en una red aparte y publican en los puertos que ya espera .env.e2e (3998/3999).
+name: humo
+
+x-log: &log
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  app:
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcommcrm:${IMAGE_TAG}
+    pull_policy: always
+    network_mode: host
+    env_file: ../../.env.e2e
+    environment:
+      PORT: "3000"
+      INTERNAL_AGENT_RUN_STUB: "true"   # IA simulada: único doble que trae el código
+      SENTRY_DSN: "off"
+      AUTH_RATE_LIMIT_LOGIN_IP: "1000"
+    logging: *log
+
+  worker:
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcomm-worker:${IMAGE_TAG}
+    pull_policy: always
+    network_mode: host
+    env_file: ../../.env.e2e
+    environment:
+      INTERNAL_AGENT_RUN_STUB: "true"
+      SENTRY_DSN: "off"
+    logging: *log
+
+  scheduler:
+    image: ${IMG_NS:?IMG_NS sale de _common.sh}/deskcomm-scheduler:${IMAGE_TAG}
+    pull_policy: always
+    network_mode: host
+    extra_hosts: ["app:127.0.0.1"]      # el entrypoint llama a http://app:3000
+    environment:
+      INTERNAL_SECRET: e2e-placeholder-nao-e-segredo
+    logging: *log
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [aux]
+    logging: *log
+
+  srh:
+    image: hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: e2e-placeholder-nao-e-segredo
+      SRH_CONNECTION_STRING: redis://redis:6379
+    ports: ["3998:80"]
+    depends_on: [redis]
+    networks: [aux]
+    logging: *log
+
+  waha:
+    image: devlikeapro/waha:latest-2026.7.2
+    profiles: ["waha"]
+    environment:
+      WAHA_API_KEY: "sha512:${WAHA_API_KEY_SHA512}"
+      WHATSAPP_HOOK_URL: http://host.docker.internal:3000/api/v1/webhooks/waha
+      WHATSAPP_HOOK_EVENTS: "message.any,message.ack,session.status"
+      WHATSAPP_DEFAULT_ENGINE: NOWEB
+      WAHA_DASHBOARD_ENABLED: "false"
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["3999:3000"]
+    networks: [aux]
+    logging: *log
+
+networks:
+  aux: {}
