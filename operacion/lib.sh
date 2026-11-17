@@ -7,7 +7,8 @@ REPO_DIR="$(cd "$OP_DIR/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$REPO_DIR/.env}"
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
-die() { log "ERROR: $*"; exit 1; }
+# die avisa por mail si el script definió avisar_falla: `exit 1` no dispara el trap ERR.
+die() { log "ERROR: $*"; if declare -F avisar_falla >/dev/null; then avisar_falla "${BASH_LINENO[0]}" || true; fi; exit 1; }
 
 # Carga KEY=valor del .env SIN ejecutarlo (no hace source) y sin pisar lo que
 # ya esté en el entorno. Cron arranca con un entorno vacío, por eso se lee acá.
@@ -74,7 +75,7 @@ retener_stamps() {
 }
 
 # ── Mail ─────────────────────────────────────────────────────────────────────
-json_str() { printf '%s' "$1" | sed -e 's/\/\\/g' -e 's/"/\\"/g' -e 's/\t/\t/g' | awk 'BEGIN{ORS="\n"}1'; }
+json_str() { local s="$1"; s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}; s=${s//$'\t'/\\t}; printf '%s' "$s"; }
 
 # enviar_mail "asunto" "cuerpo" → Resend del cliente si hay clave; si no, SMTP.
 # OPERACION_MAIL_DRYRUN=<archivo> anota el mail en vez de mandarlo (tests).
