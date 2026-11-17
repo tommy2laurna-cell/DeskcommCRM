@@ -1,7 +1,7 @@
--- 0277 — recetas de automatización y filtro «sin responder».
+-- 0297 — recetas de automatización y filtro «sin responder».
 -- Idempotente; el mismo bloque va en el apéndice del baseline.
 
--- ---- recetas de automatización y filtro «sin responder» (migration 0277) ----
+-- ---- recetas de automatización y filtro «sin responder» (migration 0297) ----
 -- `recipe_key` marca qué filas de automation_rules vienen del catálogo de recetas
 -- (lib/recetas/catalogo.ts): una por receta y organización, para que «prender» sea
 -- idempotente. `sin_responder` es la cuenta «escribió y nadie contestó» hecha en la
