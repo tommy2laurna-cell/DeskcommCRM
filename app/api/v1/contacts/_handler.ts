@@ -171,8 +171,7 @@ export async function listContactsHandler(
   }
   if (q.tag) query = query.contains("tags", [q.tag]);
   if (q.source) query = query.eq("source", q.source);
-  // Campaña que trae la entrada de prospectos por API (`source_metadata.campana`).
-  if (q.campaign) query = query.eq("source_metadata->>campana", q.campaign);
+  if (q.campaign) query = query.eq("source_metadata->>utm_campaign", q.campaign);
 
   if (q.cursor) {
     const c = decodeCursor(q.cursor);

@@ -124,6 +124,8 @@ async function resolverContacto(
         via: "api",
         origen: input.origen ?? null,
         campana: input.campana ?? null,
+        // La clave que filtra y muestra el listado de contactos (la misma que usa Captar).
+        utm_campaign: input.campana ?? null,
         id_externo: input.id_externo,
       },
     })
@@ -171,7 +173,12 @@ export async function ingresarProspecto(
   input: ProspectoInput,
 ): Promise<ResultadoDeEntrada> {
   const telefono = input.telefono ? normalizePhoneBR(input.telefono) : null;
-  const metadata = { via: "api", origen: input.origen ?? null, campana: input.campana ?? null };
+  const metadata = {
+    via: "api",
+    origen: input.origen ?? null,
+    campana: input.campana ?? null,
+    utm_campaign: input.campana ?? null,
+  };
 
   const actualizar = async (lead: LeadPrevio): Promise<ResultadoDeEntrada> => {
     let stageId = lead.stage_id;

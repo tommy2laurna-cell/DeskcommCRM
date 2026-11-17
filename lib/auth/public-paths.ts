@@ -14,6 +14,12 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/503$/,
   /^\/api\/v1\/health$/,
   /^\/api\/v1\/webhooks\//,
+  // CAPTACIÓN PÚBLICA (formularios y encuestas): la página, el envío y el script de
+  // la web del cliente. Anclados con `$`: solo el slug, nada que cuelgue de él.
+  // La organización sale del slug dentro de la ruta, nunca del body.
+  /^\/f\/[a-z0-9]{8,32}$/,
+  /^\/api\/v1\/captar\/publico\/[a-z0-9]{8,32}$/,
+  /^\/embed\/formulario\.js$/,
   /^\/api\/v1\/cron\//,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
@@ -75,6 +81,7 @@ export const PUBLIC_PATHS: RegExp[] = [
   // antes desta linha: `GET /icon` → 307 para `/login?next=%2Ficon`, enquanto
   // `/icon.png` (inexistente) devolvia 404 — a diferença é só a extensão.
   /^\/icon$/,
+  /^\/icone\/(192|512)$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
   /^\/account-suspended$/,

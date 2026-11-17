@@ -451,6 +451,15 @@ export const NAV_CATALOG = [
     // navegável. Para voltar a mostrá-la, basta devolver `sidebar: true`.
   },
   {
+    href: "/app/captar",
+    label: "Captar",
+    description: "Formulários, pesquisas e códigos QR para trazer contatos de fora do WhatsApp.",
+    icon: "QrCode",
+    group: "canais",
+    minRole: "manager",
+    sidebar: true,
+  },
+  {
     href: "/app/webhooks",
     label: "Webhooks",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",
@@ -579,6 +588,17 @@ export const NAV_CATALOG = [
     href: "/app/settings/atendimento",
     label: "Distribuição de atendimento",
     description: "Quem recebe cada cliente novo, e o que cada atendente enxerga.",
+    icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    // Las reglas del puntaje de prioridad: `manager`, porque cambian el orden del
+    // tablero para todo el equipo.
+    href: "/app/settings/puntaje",
+    label: "Puntaje de prioridad",
+    description: "Las reglas que ordenan a quién llamar primero en el tablero.",
     icon: "UsersThree",
     group: "organizacao",
     section: "Sua empresa",

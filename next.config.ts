@@ -99,10 +99,19 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Todo MENOS la página pública del formulario, que la web del cliente
+        // incrusta en un iframe (ver el bloque de abajo).
+        source: "/((?!f/).*)",
+        headers: [{ key: "X-Frame-Options", value: "DENY" }],
+      },
+      {
+        source: "/f/:slug",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // microphone=(self): o gravador de voz do composer (PTT estilo WhatsApp)
           // usa getUserMedia({audio}); microphone=() bloquearia em TODA origem,

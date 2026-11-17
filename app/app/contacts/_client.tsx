@@ -28,6 +28,8 @@ const SOURCE_OPTIONS = [
   { value: undefined, label: "Todas as origens" },
   { value: "manual", label: "Manual" },
   { value: "whatsapp", label: "WhatsApp" },
+  { value: "formulario", label: "Formulário ou QR" },
+  { value: "chat_web", label: "Chat da web" },
   { value: "nuvemshop", label: "Nuvemshop" },
   { value: "import_csv", label: "Importado (CSV)" },
   // Os dois valores que a atribuição de anúncio grava em `contacts.source`
@@ -55,7 +57,6 @@ export function ContactsListClient() {
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState<string | undefined>(undefined);
   const [source, setSource] = useState<string | undefined>(undefined);
-  const [campaignInput, setCampaignInput] = useState("");
   const [campaign, setCampaign] = useState("");
   const [orderBy, setOrderBy] = useState<ContactOrderBy>("last_activity_at");
   const [orderDir, setOrderDir] = useState<"asc" | "desc">("desc");
@@ -69,21 +70,8 @@ export function ContactsListClient() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCampaign(campaignInput.trim()), 250);
-    return () => clearTimeout(timer);
-  }, [campaignInput]);
-
   const filters = useMemo(
-    () => ({
-      search,
-      tag,
-      source,
-      campaign: campaign || undefined,
-      order_by: orderBy,
-      order_dir: orderDir,
-      limit,
-    }),
+    () => ({ search, tag, source, campaign: campaign.trim() || undefined, order_by: orderBy, order_dir: orderDir, limit }),
     [search, tag, source, campaign, orderBy, orderDir, limit],
   );
   const q = useContactList(filters);
@@ -205,12 +193,11 @@ export function ContactsListClient() {
         </DropdownMenu>
 
         <Input
-          type="search"
-          placeholder={t("Campanha")}
-          value={campaignInput}
-          onChange={(e) => setCampaignInput(e.target.value)}
-          className="h-9 w-36"
           aria-label={t("Campanha")}
+          placeholder={t("Campanha")}
+          className="h-8 w-36"
+          value={campaign}
+          onChange={(e) => setCampaign(e.target.value)}
         />
 
         <DropdownMenu>
@@ -239,7 +226,6 @@ export function ContactsListClient() {
               setSearch("");
               setTag(undefined);
               setSource(undefined);
-              setCampaignInput("");
               setCampaign("");
             }}
           >
