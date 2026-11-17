@@ -12,6 +12,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, type NextResponse } from "next/server";
 
+import { marcarReenvioInterno } from "@/lib/captar/reenvio-interno";
 import { POST as capturar } from "@/app/api/v1/webhooks/in/[token]/route";
 import { fail, ok } from "@/lib/api/wrappers";
 import { logger } from "@/lib/logger";
@@ -99,11 +100,13 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse | R
   );
 
   const token = fuente.path_token as string;
-  const reenvio = new NextRequest(new URL(`/api/v1/webhooks/in/${token}`, req.url), {
-    method: "POST",
-    headers: cabecerasParaLaCaptacion(req),
-    body: JSON.stringify(payload),
-  });
+  const reenvio = marcarReenvioInterno(
+    new NextRequest(new URL(`/api/v1/webhooks/in/${token}`, req.url), {
+      method: "POST",
+      headers: cabecerasParaLaCaptacion(req),
+      body: JSON.stringify(payload),
+    }),
+  ) as NextRequest;
   const respuesta = await capturar(reenvio, { params: Promise.resolve({ token }) });
   if (!respuesta.ok) {
     logger.warn("[captar.publico] la captación recusó el envío", { formId: form.id, status: respuesta.status });
