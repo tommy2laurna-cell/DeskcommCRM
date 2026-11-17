@@ -150,20 +150,33 @@ test.describe("recetas: recordatorio de turno 24 h", () => {
       await page.waitForTimeout(700);
     }
 
-    await expect
-      .poll(
-        async () => {
-          const { data: msgs } = await db
-            .from("messages")
-            .select("body, direction")
-            .eq("organization_id", org)
-            .eq("contact_id", contacto)
-            .eq("direction", "outbound");
-          return msgs?.some((m) => (m.body ?? "").includes(nombre) && /turno/i.test(m.body ?? "")) ?? false;
-        },
-        { timeout: 30_000, message: "el recordatorio simulado no apareció en la conversa" },
-      )
-      .toBe(true);
+    try {
+      await expect
+        .poll(
+          async () => {
+            const { data: msgs } = await db
+              .from("messages")
+              .select("body, direction")
+              .eq("organization_id", org)
+              .eq("contact_id", contacto)
+              .eq("direction", "outbound");
+            return msgs?.some((m) => (m.body ?? "").includes(nombre) && /turno/i.test(m.body ?? "")) ?? false;
+          },
+          { timeout: 30_000, message: "el recordatorio simulado no apareció en la conversa" },
+        )
+        .toBe(true);
+    } catch (err) {
+      // Diagnóstico para el CI: sin esto, "no apareció" no dice si la regla no corrió, la saltó o falló al enviar.
+      const [corridas, eventos, mensajes] = await Promise.all([
+        db.from("automation_rule_runs").select("*").eq("organization_id", org),
+        db.from("event_log").select("event_type, status, attempts, last_error").eq("organization_id", org),
+        db.from("messages").select("direction, status, body, error_message").eq("organization_id", org).eq("contact_id", contacto),
+      ]);
+      throw new Error(
+        `${(err as Error).message}
+DIAGNOSTICO ${JSON.stringify({ corridas: corridas.data ?? corridas.error, eventos: eventos.data ?? eventos.error, mensajes: mensajes.data ?? mensajes.error }, null, 1)}`,
+      );
+    }
 
     const { data: corridas } = await db
       .from("automation_rule_runs")
