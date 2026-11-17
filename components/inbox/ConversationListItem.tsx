@@ -71,9 +71,9 @@ interface Props {
  * podem ser mantidas em arquivos diferentes.
  */
 const COR_DO_COMANDO: Record<string, string> = {
-  humano: "bg-blue-500",
+  humano: "bg-info",
   automatico: "bg-purple-500",
-  aguardando: "bg-amber-500",
+  aguardando: "bg-warning",
   ninguem: "bg-muted-foreground/60",
   encerrada: "bg-muted-foreground/30",
 };
@@ -197,7 +197,7 @@ export function ConversationListItem({
       className={cn(
         "group relative flex w-full items-start gap-3 border-b border-border/70 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated",
         "focus-visible:outline-hidden focus-visible:bg-surface-elevated",
-        isSelected && "bg-accent-50 hover:bg-accent-50",
+        isSelected && "bg-accent-soft hover:bg-accent-soft",
       )}
       aria-current={isSelected ? "true" : undefined}
     >
@@ -255,7 +255,7 @@ export function ConversationListItem({
             {displayName}
           </span>
           <span
-            className="shrink-0 text-[11px] tabular-nums text-text-subtle"
+            className={cn("shrink-0 text-[11px] tabular-nums text-text-subtle", isSelected && "text-text-muted")}
             // O mesmo lugar da tela mostra duas coisas diferentes conforme a aba:
             // na Fila é "desde quando o cliente escreveu", nas outras é "há quanto
             // tempo a conversa mexeu". O rótulo existe só onde a leitura muda.

@@ -804,6 +804,12 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
       "sufixo do JID do WhatsApp. Aparece em `lib/waha/resolve-contact-whatsapp-id.ts` desde antes desta régua existir, num `endsWith` que distingue `@lid`, `@c.us` e `@s.whatsapp.net` — é o protocolo do WhatsApp falando, não endereço que o produto chama nem palavra de interface. Trocar pela marca do revendedor faz o CRM deixar de reconhecer o identificador que o próprio WhatsApp manda.",
   },
   // ── destino de chamada: o código fala com eles, sempre foi assim ──────────
+  "wa.me": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "link de conversa do WhatsApp (`https://wa.me/<numero>?text=`) que o QR de Captar codifica (lib/captar/qr.ts). É o destino que o celular abre ao escanear: trocar o domínio faria o QR não abrir a conversa.",
+  },
+
   "api.openai.com": {
     categoria: "FORNECEDOR",
     motivo:
