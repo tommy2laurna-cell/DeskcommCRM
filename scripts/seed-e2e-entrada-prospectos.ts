@@ -1,7 +1,7 @@
 /**
  * Seed E2E de la entrada de prospectos: un token de API de la org de test con
- * los scopes que le da quien arma la automatización de n8n (`mcp:read` para
- * poder consultar, `mcp:write` para escribir). Rol por defecto: agent.
+ * el scope que le da quien arma la automatización de n8n: `prospectos:write`
+ * (mínimo privilegio, sin acceso al MCP). Rol por defecto: agent.
  *
  * Depende de que `seed-e2e-credentials.ts` ya haya corrido (crea la org y sus
  * funnels). Escribe el plaintext en `.e2e-entrada-prospectos.json` (gitignored).
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
       name: NOMBRE,
       prefix,
       token_hash: `\\x${hash.toString("hex")}`,
-      scopes: ["mcp:read", "mcp:write"],
+      scopes: ["prospectos:write"],
       expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     })
     .select("id")
