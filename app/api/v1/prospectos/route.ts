@@ -35,7 +35,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     requestId,
     resource: "crm_leads",
     role: "agent",
-    scope: "mcp:write",
+    scope: "prospectos:write",
   });
   if (!authz.ok) return authz.response;
 

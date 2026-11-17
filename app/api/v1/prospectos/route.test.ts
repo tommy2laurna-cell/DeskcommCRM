@@ -41,10 +41,10 @@ describe("POST /api/v1/prospectos", () => {
     expect(isPublicPath("/api/v1/prospectos/otra-cosa")).toBe(false);
   });
 
-  it("pide scope mcp:write y rol agent", async () => {
+  it("pide el scope propio prospectos:write (no mcp:write) y rol agent", async () => {
     vi.mocked(ingresarProspecto).mockResolvedValue({ accion: "alta", contacto_id: "c", lead_id: "l", telefono: null, etapa_id: "s" });
     await POST(post({ telefono: "+5491112345678", id_externo: "x" }));
-    expect(vi.mocked(resolveAuthDual).mock.calls[0]![1]).toMatchObject({ role: "agent", scope: "mcp:write" });
+    expect(vi.mocked(resolveAuthDual).mock.calls[0]![1]).toMatchObject({ role: "agent", scope: "prospectos:write" });
   });
 
   it("devuelve la respuesta de auth tal cual si no hay token válido", async () => {
