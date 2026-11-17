@@ -108,12 +108,13 @@ describe("aplicarConvite consulta a LINHA, não só o token", () => {
     expect(rpcDoAceite).toHaveBeenCalled();
   });
 
-  it("convite SEM linha segue o fluxo — emitido antes da migration 0238", async () => {
-    // Congela a decisão que o cabeçalho do módulo documenta: ausência de linha
-    // NÃO é revogação. Sem este caso, alguém "endureceria" a guarda para
-    // `!linha || linha.revoked_at` e quebraria todo convite antigo, numa
-    // instalação que não tem como reemitir o que já foi enviado.
-    expect((await aplicar(null)).ok).toBe(true);
+  it("⭐ convite SEM linha é recusado — um token assinado sem linha não pode ser revogado", async () => {
+    // C1 (auditoria 2026-11-14): sem linha não há como revogar, e o token valia
+    // 24 h. Toda emissão (`emitirConvite`) grava a linha, então ausência dela
+    // significa token que ninguém emitiu por esse caminho.
+    const r = await aplicar(null);
+    expect(r).toEqual({ ok: false, motivo: "invalid_or_expired" });
+    expect(rpcDoAceite).not.toHaveBeenCalled();
   });
 
   it("a recusa da própria função do banco (42501) também não é vínculo", async () => {

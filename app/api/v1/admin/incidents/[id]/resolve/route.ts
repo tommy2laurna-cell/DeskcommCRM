@@ -11,7 +11,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdminWrite } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -33,9 +33,9 @@ export async function POST(
   const requestId = randomUUID();
   const { id } = await params;
 
-  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
+  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdminWrite>>;
   try {
-    adminCtx = await requirePlatformAdmin();
+    adminCtx = await requirePlatformAdminWrite();
   } catch {
     return fail("forbidden", "Platform admin required", 403, { requestId });
   }
