@@ -5,7 +5,7 @@
  * atual). Resolve a channel_session por `body.session` (= waha_session_name).
  * A variante /waha/[token] é a rota per-tenant canônica de produção.
  *
- * Pipeline: lookup session -> verifica HMAC SHA512 -> loga em
+ * Pipeline: verifica HMAC SHA512 (obrigatório) -> lookup session -> loga em
  * webhook_events_log -> dispatchWahaEvent (ingestão compartilhada, ver
  * lib/waha/ingest.ts). Idempotência e resolução atômica de contato/conversa
  * vivem no módulo compartilhado.
@@ -14,7 +14,6 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,6 +28,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const requestId = randomUUID();
 
   const rawBody = await req.text();
+
+  // ─── H5: assinatura ANTES de qualquer coisa ───────────────────────────────────
+  //
+  // Esta rota não tem token na URL: o único identificador é `body.session`, que
+  // quem chama escreve. Resolver a sessão (e com ela a org) antes de conferir a
+  // assinatura deixava qualquer um que soubesse o nome de uma sessão alheia injetar
+  // mensagem nela, sempre que o Caddy não estivesse na frente. Por isso aqui a
+  // assinatura é exigida SEMPRE, independente de WAHA_WEBHOOK_REQUIRE_SIGNATURE, e
+  // conferida com o segredo GLOBAL (WAHA_HMAC_SECRET = WHATSAPP_HOOK_HMAC_KEY do
+  // contêiner), que é com o que o WAHA assina o hook global. Sem assinatura válida:
+  // 401 sem tocar no banco, sem audit (a org do corpo não é confiável) e sem
+  // falar do contrato do payload.
+  const sigHeader = req.headers.get("x-webhook-hmac");
+  const auth = authenticateWahaWebhook({
+    rawBody,
+    signatureHeader: sigHeader,
+    sessionSecret: null,
+    requireSignature: true,
+  });
+  if (!auth.ok) {
+    logger.warn("[waha.webhook] assinatura ausente ou inválida (rota global)", {
+      request_id: requestId,
+      reason: auth.reason,
+      had_signature: Boolean(sigHeader),
+    });
+    return fail("unauthenticated", auth.reason, 401, { requestId });
+  }
+
   // ─── O contrato do fio, em DOIS momentos ─────────────────────────────────
   //
   // Isto era `JSON.parse(rawBody) as WahaEnvelope`: um cast, que não checa nada
@@ -84,7 +111,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     admin
       .from("channel_sessions")
       .select(
-        "id, organization_id, waha_session_name, webhook_secret_encrypted, status, is_warmup_complete, warmup_started_at",
+        "id, organization_id, waha_session_name, status, is_warmup_complete, warmup_started_at",
       )
       .eq("waha_session_name", sessionName);
   const { data: session, error: sessErr } = await queryTolerantToMissingArchived(
@@ -105,33 +132,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Autenticação fail-closed — regras e o porquê em lib/waha/webhook-auth.ts.
-  const sigHeader = req.headers.get("x-webhook-hmac") ?? req.headers.get("X-Webhook-Hmac");
-  let sessionSecret: string | null = null;
-  try {
-    const dec = await admin.rpc("fn_decrypt_oauth", {
-      ciphertext: session.webhook_secret_encrypted,
-    });
-    if (!dec.error && typeof dec.data === "string") sessionSecret = dec.data;
-  } catch {
-    sessionSecret = null;
-  }
-
-  const auth = authenticateWahaWebhook({ rawBody, signatureHeader: sigHeader, sessionSecret });
-  if (!auth.ok) {
-    await audit({
-      action: "webhook.hmac_invalid",
-      organizationId: session.organization_id,
-      metadata: {
-        provider: "waha",
-        session: session.waha_session_name,
-        event: roteado.event,
-        reason: auth.reason,
-        had_signature: Boolean(sigHeader),
-      },
-    });
-    return fail("unauthenticated", auth.reason, 401, { requestId });
-  }
   const validSignature = auth.signatureVerified;
 
   const eventType = roteado.event ?? "unknown";

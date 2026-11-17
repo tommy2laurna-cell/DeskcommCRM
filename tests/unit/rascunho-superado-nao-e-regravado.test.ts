@@ -64,6 +64,7 @@ const CANAL = "22222222-2222-4222-8222-222222222222";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({
+  mfaEmDivida: async () => false,
   loadAuthUser: vi.fn(async () => ({ id: "user-1", email: "u@example.com" })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, name: "Org", role: "admin" })),
 }));
