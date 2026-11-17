@@ -149,6 +149,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // primeira major que reprovasse CANCELARIA a outra, e o relatório diria
   // `cancelled` em vez de medir as duas — cobertura declarada que o CI cancela é
   // o modo de falha que a #454 fecha.
+  "liquid-capturas.yml::capturas": {
+    condicao: null,
+    efeito:
+      "Saca as capturas antes/depois do Liquid e mede o contraste axe das telas. Pulado, " +
+      "uma tela que reprova contraste passa sem ninguém ver.",
+  },
   "operacion.yml::restauracion": {
     condicao: null,
     efeito:

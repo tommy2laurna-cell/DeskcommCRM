@@ -72,7 +72,7 @@ const TODOS_OS_PACOTES: ReadonlyArray<ToolBundle> = PACOTES.map((p) => p.id);
 
 const CLASSE_RISCO: Record<ToolRisk, string> = {
   seguro: "border-border/60 text-muted-foreground",
-  atencao: "border-amber-500/40 text-amber-700 dark:text-amber-400",
+  atencao: "border-warning/40 text-warning-fg dark:text-warning",
   critico: "border-destructive/40 text-destructive",
 };
 
@@ -132,7 +132,7 @@ function FichaCapacidade({
           // jogava fora; o aviso existia só no log do worker, que ninguém lê.
           <span
             data-testid={`motivo-nao-marcavel-${capacidade.name}`}
-            className="block text-xs text-sky-700 dark:text-sky-400"
+            className="block text-xs text-info-fg dark:text-info"
           >
             {t(capacidade.motivo_nao_marcavel)}
           </span>
@@ -391,7 +391,7 @@ export function ToolPicker({ value, onChange, disabled }: Props) {
       {orfas.length > 0 ? (
         <div
           data-testid="capacidades-orfas"
-          className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400"
+          className="space-y-2 rounded-md border border-warning/40 bg-warning-bg p-3 text-xs text-warning-fg dark:text-warning"
         >
           <p>
             {orfas.length === 1
