@@ -149,6 +149,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // primeira major que reprovasse CANCELARIA a outra, e o relatório diria
   // `cancelled` em vez de medir as duas — cobertura declarada que o CI cancela é
   // o modo de falha que a #454 fecha.
+  "operacion.yml::restauracion": {
+    condicao: null,
+    efeito:
+      "Prova que um backup cifrado se RESTAURA de verdade (dump -> rclone -> base nova -> contagens). " +
+      "Pulado, o verde deixa de dizer que os backups do cliente se leem.",
+  },
   "ci.yml::invariants-majors": {
     condicao: null,
     efeito:
@@ -158,6 +164,15 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "novo. Cada perna roda `test:db` E `test:db:update`: o segundo era um script que nenhum " +
       "workflow chamava desde 2026-08-27, e `test:db` sozinho mede um banco VAZIO — constraint " +
       "que só quebra com linha existente passava verde.",
+  },
+
+  // --- fora da cadeia de entrega ---------------------------------------------
+  "humo.yml::humo": {
+    condicao: null,
+    efeito:
+      "É o humo semanal: sobe as imagens PUBLICADAS no GHCR (sem compilar) contra o Supabase " +
+      "local, roda os journeys de `tests/e2e` e mede a RAM por contêiner. Sem ele, ninguém " +
+      "confere que a imagem que a VPS puxa de fato sobe e atende, nem quanto ela pesa.",
   },
 };
 
