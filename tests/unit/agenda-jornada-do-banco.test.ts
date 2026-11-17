@@ -70,9 +70,9 @@ describe("o que o banco devolve de verdade", () => {
     const r = lerJornadaDoBanco({ windows: [{ dow: 1, start: "09:00", end: "18:00" }] });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.jornada.timezone).toBe("America/Sao_Paulo");
+    expect(r.jornada.timezone).toBe("America/Argentina/Buenos_Aires");
     expect(r.jornada.timezone).not.toBe(
-      Intl.DateTimeFormat().resolvedOptions().timeZone === "America/Sao_Paulo"
+      Intl.DateTimeFormat().resolvedOptions().timeZone === "America/Argentina/Buenos_Aires"
         ? "__nunca__"
         : Intl.DateTimeFormat().resolvedOptions().timeZone,
     );
@@ -198,11 +198,11 @@ describe("o erro tem duas plateias, e elas não podem receber a mesma frase", ()
 });
 
 describe("fusoSuposto — a distinção que o parse apaga", () => {
-  it("quem NUNCA configurou e quem ESCOLHEU São Paulo são indistinguíveis DEPOIS do parse", () => {
-    // Medido: os dois devolvem {timezone:"America/Sao_Paulo", windows:[]}.
+  it("quem NUNCA configurou e quem ESCOLHEU Buenos Aires são indistinguíveis DEPOIS do parse", () => {
+    // Medido: os dois devolvem {timezone:"America/Argentina/Buenos_Aires", windows:[]}.
     // Por isso a marca é capturada antes, e não derivada do resultado.
     const nunca = lerJornadaDoBanco({});
-    const escolheu = lerJornadaDoBanco({ timezone: "America/Sao_Paulo" });
+    const escolheu = lerJornadaDoBanco({ timezone: "America/Argentina/Buenos_Aires" });
     expect(nunca.ok && escolheu.ok).toBe(true);
     if (!nunca.ok || !escolheu.ok) return;
     expect(nunca.jornada).toEqual(escolheu.jornada);

@@ -99,7 +99,7 @@ export async function carregarRosterDeAtendimento(
       papel: m.role,
       disponivel: a?.is_available ?? false,
       capacidade: a?.capacity ?? null,
-      agenda: a?.schedule ?? { timezone: "America/Sao_Paulo", windows: [] },
+      agenda: a?.schedule ?? { timezone: "America/Argentina/Buenos_Aires", windows: [] },
       atualizadoEm: a?.updated_at ?? null,
       cargaAtual: cargaPorUsuario.get(m.user_id) ?? 0,
     };

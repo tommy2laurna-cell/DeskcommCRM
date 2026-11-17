@@ -16,7 +16,15 @@
  * runtime em vez de lida do bundle.
  */
 
-export const DEFAULT_APP_NAME = "DeskcommCRM";
+export const DEFAULT_APP_NAME = "CRM";
+
+/**
+ * O nome do PRODUTO de origem — o único que o logotipo desenhado
+ * (`lib/branding/desenho.ts`) soletra. O padrão NEUTRO acima não é este: quem não
+ * configurou marca vê o texto «CRM», e o desenho só aparece se alguém pôr
+ * `APP_NAME=DeskcommCRM` de propósito.
+ */
+const NOME_DO_PRODUTO = "DeskcommCRM";
 
 export type Branding = {
   /** Nome exibido na interface e nos títulos de página. */
@@ -93,7 +101,7 @@ export function resolveBranding(
  * escrita, só pintada de outro jeito.
  */
 export function marcaEhADoProduto(marca: Pick<Branding, "name" | "logoUrl">): boolean {
-  return marca.logoUrl === null && marca.name === DEFAULT_APP_NAME;
+  return marca.logoUrl === null && marca.name === NOME_DO_PRODUTO;
 }
 
 export function branding(): Branding {

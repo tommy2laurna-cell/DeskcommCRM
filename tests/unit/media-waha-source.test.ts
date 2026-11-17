@@ -4,6 +4,7 @@ import { fetchWahaMedia } from "@/lib/messaging/media/waha-source";
 import { MediaTooLargeError } from "@/lib/messaging/media/types";
 
 const WAHA_BASE = "http://localhost:3030";
+const SESSAO = "sessao";
 
 describe("fetchWahaMedia", () => {
   beforeEach(() => {
@@ -22,15 +23,18 @@ describe("fetchWahaMedia", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const media = await fetchWahaMedia(`${WAHA_BASE}/api/files/abc.jpg`);
+    const media = await fetchWahaMedia(`${WAHA_BASE}/api/files/${SESSAO}/abc.jpg`, null, SESSAO);
     expect(media.mime).toBe("image/jpeg");
     expect(media.buffer.byteLength).toBe(3);
     expect(fetchMock).toHaveBeenCalledWith(
-      `${WAHA_BASE}/api/files/abc.jpg`,
+      `${WAHA_BASE}/api/files/${SESSAO}/abc.jpg`,
       expect.objectContaining({ headers: { "X-Api-Key": "hash123" } }),
     );
   });
 
+  // C2: antes conservava a query (`?q=1`) e a mandava ao WAHA com a API key
+  // global. Agora a query é recusada (waha-media-so-arquivos.test.ts) e o host
+  // segue sendo reescrito.
   it("reescreve host arbitrário p/ a base do WAHA (anti-SSRF por construção)", async () => {
     const fetchMock = vi
       .fn()
@@ -39,9 +43,9 @@ describe("fetchWahaMedia", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await fetchWahaMedia("http://evil.example.com/api/files/x.jpg?q=1");
+    await fetchWahaMedia(`http://evil.example.com/api/files/${SESSAO}/x.jpg`, null, SESSAO);
     expect(fetchMock).toHaveBeenCalledWith(
-      `${WAHA_BASE}/api/files/x.jpg?q=1`,
+      `${WAHA_BASE}/api/files/${SESSAO}/x.jpg`,
       expect.anything(),
     );
   });
@@ -55,7 +59,7 @@ describe("fetchWahaMedia", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await fetchWahaMedia("http://localhost:3000/api/files/sessao/sticker.webp");
+    await fetchWahaMedia("http://localhost:3000/api/files/sessao/sticker.webp", null, SESSAO);
     expect(fetchMock).toHaveBeenCalledWith(
       `${WAHA_BASE}/api/files/sessao/sticker.webp`,
       expect.anything(),
@@ -64,7 +68,7 @@ describe("fetchWahaMedia", () => {
 
   it("propaga status HTTP de erro", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
-    await expect(fetchWahaMedia(`${WAHA_BASE}/api/files/gone.jpg`)).rejects.toThrow(
+    await expect(fetchWahaMedia(`${WAHA_BASE}/api/files/${SESSAO}/gone.jpg`, null, SESSAO)).rejects.toThrow(
       "waha_media_404",
     );
   });
@@ -79,7 +83,7 @@ describe("fetchWahaMedia", () => {
         }),
       ),
     );
-    await expect(fetchWahaMedia(`${WAHA_BASE}/api/files/big.mp4`)).rejects.toThrow(
+    await expect(fetchWahaMedia(`${WAHA_BASE}/api/files/${SESSAO}/big.mp4`, null, SESSAO)).rejects.toThrow(
       MediaTooLargeError,
     );
   });
@@ -89,11 +93,11 @@ describe("fetchWahaMedia", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response(new ArrayBuffer(2), { status: 200 })),
     );
-    const media = await fetchWahaMedia(`${WAHA_BASE}/api/files/x`, "audio/ogg; codecs=opus");
+    const media = await fetchWahaMedia(`${WAHA_BASE}/api/files/${SESSAO}/x`, "audio/ogg; codecs=opus", SESSAO);
     expect(media.mime).toBe("audio/ogg; codecs=opus");
   });
 
   it("mapeia mediaUrl malformada p/ waha_media_untrusted_host", async () => {
-    await expect(fetchWahaMedia("not-a-url")).rejects.toThrow("waha_media_untrusted_host");
+    await expect(fetchWahaMedia("not-a-url", null, SESSAO)).rejects.toThrow("waha_media_untrusted_host");
   });
 });

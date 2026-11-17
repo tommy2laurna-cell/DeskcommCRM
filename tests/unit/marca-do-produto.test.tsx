@@ -41,7 +41,9 @@ const org = {
 let contexto: { user: AuthUser; activeOrg: ActiveOrg | null } = { user: usuario, activeOrg: org };
 vi.mock("@/hooks/auth/AuthProvider", () => ({ useAuth: () => contexto }));
 
-const PADRAO: Branding = { name: DEFAULT_APP_NAME, logoUrl: null, initial: "D" };
+/** O produto de origem (o que o logotipo desenhado soletra). */
+const NOME_DO_PRODUTO = "DeskcommCRM";
+const PADRAO: Branding = { name: NOME_DO_PRODUTO, logoUrl: null, initial: "D" };
 
 function renderSidebar(marca: Branding, collapsed: boolean) {
   return render(
@@ -66,7 +68,7 @@ describe("marcaEhADoProduto", () => {
   });
 
   it("quem subiu logo já tem o dele", () => {
-    expect(marcaEhADoProduto({ name: DEFAULT_APP_NAME, logoUrl: "https://cdn.x/logo.png" })).toBe(
+    expect(marcaEhADoProduto({ name: NOME_DO_PRODUTO, logoUrl: "https://cdn.x/logo.png" })).toBe(
       false,
     );
   });
@@ -75,19 +77,26 @@ describe("marcaEhADoProduto", () => {
 describe("o desenho na barra lateral", () => {
   it("aberta e sem marca própria, mostra o logotipo do produto (SVG, não <img>)", () => {
     renderSidebar(PADRAO, false);
-    const logotipo = screen.getByRole("img", { name: DEFAULT_APP_NAME });
+    const logotipo = screen.getByRole("img", { name: NOME_DO_PRODUTO });
     expect(logotipo.tagName.toLowerCase()).toBe("svg");
     // O e2e `marca-logo.spec.ts` lê "barra sem <img>" como "sem logo do
     // revendedor"; um <img> do produto aqui faria a spec medir a coisa errada.
     expect(document.querySelector("img")).toBeNull();
     // Nem o nome em texto: o logotipo já o escreve.
-    expect(screen.queryByText(DEFAULT_APP_NAME)).toBeNull();
+    expect(screen.queryByText(NOME_DO_PRODUTO)).toBeNull();
   });
 
   it("recolhida, mostra só o símbolo — e não a inicial em texto", () => {
     renderSidebar(PADRAO, true);
-    expect(screen.getByRole("img", { name: DEFAULT_APP_NAME }).tagName.toLowerCase()).toBe("svg");
+    expect(screen.getByRole("img", { name: NOME_DO_PRODUTO }).tagName.toLowerCase()).toBe("svg");
     expect(screen.queryByText("D")).toBeNull();
+  });
+
+  it("o padrão NEUTRO («CRM») aparece em texto: o logotipo do produto não vaza", () => {
+    renderSidebar({ name: DEFAULT_APP_NAME, logoUrl: null, initial: "C" }, false);
+    expect(screen.getAllByText(DEFAULT_APP_NAME).length).toBeGreaterThan(0);
+    expect(document.querySelector("svg[role=img]")).toBeNull();
+    expect(marcaEhADoProduto({ name: DEFAULT_APP_NAME, logoUrl: null })).toBe(false);
   });
 
   it("com nome da instalação, segue em texto — o desenho do produto não vaza", () => {
