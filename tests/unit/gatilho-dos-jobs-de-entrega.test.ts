@@ -192,6 +192,13 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "local, roda os journeys de `tests/e2e` e mede a RAM por contêiner. Sem ele, ninguém " +
       "confere que a imagem que a VPS puxa de fato sobe e atende, nem quanto ela pesa.",
   },
+  "exportar-a-base.yml::exportar-y-abrir": {
+    condicao: null,
+    efeito:
+      "Prueba que el Conectado baja al Base (exportar dos veces da el mismo archivo, cuadra origen = destino + CSV y el " +
+      "archivo abre con las migraciones del Base). Desligado, la cláusula 8 de la oferta («tus datos bajan al Base») " +
+      "dejaría de tener respaldo medido.",
+  },
 };
 
 interface JobLido {

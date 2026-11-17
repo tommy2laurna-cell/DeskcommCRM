@@ -1,0 +1,112 @@
+name: exportar-a-base
+
+# Prueba de la baja del Conectado al Base contra un Postgres de verdad: Supabase local + baseline.sql (lo mismo que
+# aplica el install.sh), una org sembrada como la de un cliente, el exportador dos veces y el archivo abierto con el
+# contrato de migraciones del Base (checksums SHA-384, integrity_check). Pasa si las dos corridas dan la misma huella,
+# los conteos destino coinciden con origen menos lo que va al CSV, y el archivo abre sin problemas.
+# (Workflow propio, como importar-base.yml: humo.yml todavía no está en main.)
+
+on:
+  pull_request:
+    paths:
+      - "lrn/scripts/exportar-a-base.ts"
+      - "lrn/scripts/sembrar-para-exportar.ts"
+      - "lrn/fixtures/base-migraciones/**"
+      - ".github/workflows/exportar-a-base.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exportar-y-abrir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/preparar-node
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Subir Supabase local (sin la cadena de migrations)
+        run: |
+          mv supabase/migrations /tmp/migrations-off
+          mkdir -p supabase/migrations
+          supabase start
+
+      - name: Extensiones + baseline.sql
+        run: |
+          DB="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          psql "$DB" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists vector with schema public;
+          create extension if not exists citext with schema public;
+          create extension if not exists pg_trgm with schema public;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          # PostgREST lee el esquema al arrancar: se reinicia para que vea las tablas nuevas.
+          docker restart $(docker ps -q --filter name=supabase_rest) >/dev/null
+          sleep 8
+
+      - name: Org de prueba
+        run: |
+          pnpm e2e:env
+          cp .env.e2e .env.local
+          pnpm exec tsx scripts/seed-e2e-credentials.ts
+
+      - name: Sembrar datos de cliente
+        run: pnpm exec tsx lrn/scripts/sembrar-para-exportar.ts e2e-test-org
+
+      - name: Simular, exportar y volver a exportar
+        run: |
+          set -euo pipefail
+          S="pnpm exec tsx lrn/scripts/exportar-a-base.ts --org e2e-test-org"
+          $S --simular --salida "$RUNNER_TEMP/sim"
+          $S --salida "$RUNNER_TEMP/r1"
+          $S --salida "$RUNNER_TEMP/r2"
+          node - <<'JS'
+          const fs = require("fs"), d = process.env.RUNNER_TEMP;
+          const L = (n, s) => JSON.parse(fs.readFileSync(`${d}/${n}/resultado-${s}.json`, "utf8"));
+          const sim = L("sim", "simulacion"), a = L("r1", "real"), b = L("r2", "real"), o = a.origen;
+          // Lo sembrado como mínimo (la org de prueba puede traer más): ver sembrar-para-exportar.ts
+          const minimo = { embudo: 2, etapa: 5, contacto: 3, oportunidad: 4, etiqueta: 2, contacto_etiqueta: 3, oportunidad_etiqueta: 1, toque: 5 };
+          const origen = { embudo: o.crm_pipelines, etapa: o.crm_stages, contacto: o.contacts, oportunidad: o.crm_leads, toque: o.lead_notes + o.crm_tasks };
+          let mal = 0;
+          let md = "## Exportar al Base dos veces\n\n| tabla | filas origen | filas destino (simulación / 1.ª / 2.ª) |\n|---|---|---|\n";
+          for (const [k, m] of Object.entries(minimo)) {
+            const bien = a.destino[k] >= m && a.destino[k] === sim.destino[k] && a.destino[k] === b.destino[k];
+            if (!bien) mal++;
+            md += `| ${k} | ${origen[k] ?? "—"} | ${sim.destino[k]} / ${a.destino[k]} / ${b.destino[k]}${bien ? "" : " ✗"} |\n`;
+          }
+          const mismaHuella = a.huella === b.huella && a.huella === sim.huella;
+          md += `\nhuella: simulación ${sim.huella} · 1.ª ${a.huella} · 2.ª ${b.huella} ${mismaHuella ? "✓" : "✗"}\n`;
+          md += `cuadre origen = destino + CSV: ${a.descuadres.length ? "✗ " + a.descuadres.join("; ") : "✓"}\n`;
+          md += `integrity_check: ${a.verificacion.integrity} · quick_check: ${a.verificacion.quick} · migraciones hasta la ${a.verificacion.version}\n`;
+          md += `no exportado (CSV): ${a.noExportado} fila(s)\n`;
+          if (!mismaHuella || a.descuadres.length || b.descuadres.length || !a.verificacion.ok || a.verificacion.integrity !== "ok") mal++;
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          console.log(md);
+          if (mal) { console.error("La exportación no cumple"); process.exit(1); }
+          JS
+
+      - name: Abrir el archivo como lo abre el Base
+        run: |
+          set -euo pipefail
+          pnpm exec tsx lrn/scripts/exportar-a-base.ts --verificar "$RUNNER_TEMP/r2/crm.db"
+          test -s "$RUNNER_TEMP/r2/marca.json"
+          node - <<'JS'
+          const m = JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/r2/marca.json", "utf8"));
+          if (m.negocio !== "Panadería Ñandú" || m.colores.acento !== "#aa3300") { console.error("marca.json no trae la marca sembrada"); process.exit(1); }
+          JS
+          # El CSV lleva lo que no entra: la tarea cancelada sembrada.
+          grep -q "crm_tasks" "$RUNNER_TEMP/r2/no-exportado.csv"
+
+      - name: Informe
+        if: always()
+        run: cat "$RUNNER_TEMP/r2/informe-real.md" || true
