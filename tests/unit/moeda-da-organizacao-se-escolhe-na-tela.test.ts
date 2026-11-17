@@ -25,6 +25,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/auth/server", () => ({
+  mfaEmDivida: async () => false,
   loadAuthUser: vi.fn(),
   resolveActiveOrg: vi.fn(),
 }));
