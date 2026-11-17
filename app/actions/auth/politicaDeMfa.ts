@@ -17,7 +17,7 @@ import { supportWriteError } from "@/lib/impersonate/support";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg, sessionAal, isMfaEnrolled } from "@/lib/auth/server";
+import { loadAuthUser, resolveActiveOrg, sessionAal, isMfaEnrolled, mfaEmDivida } from "@/lib/auth/server";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,6 +42,10 @@ export async function definirExigenciaDeMfa(exigir: boolean): Promise<ResultadoD
 
   if (org.role !== "admin") {
     return { ok: false, erro: "Só um administrador pode mudar essa regra." };
+  }
+  // Sessão aal1 com TOTP sem provar não muda a regra de MFA da empresa (H3).
+  if (await mfaEmDivida()) {
+    return { ok: false, erro: "Confirme o código do aplicativo para continuar." };
   }
 
   const admin = createAdminClient();
