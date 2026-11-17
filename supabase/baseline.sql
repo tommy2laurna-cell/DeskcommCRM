@@ -27268,9 +27268,9 @@ create policy api_tokens_insert_exige_mfa on public.api_tokens
 -- A definição da função está antes da varredura de anon.
 do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
 
--- ---- presupuestos desde un negócio (migration 0277) ----
+-- ---- presupuestos desde un negócio (migration 0298) ----
 -- ============================================================================
--- 0277 — PRESUPUESTOS desde un negocio (GC3)
+-- 0298 — PRESUPUESTOS desde un negocio (GC3)
 --
 -- Un presupuesto es lo que se le prometió a un cliente: qué, cuántas unidades,
 -- a qué precio, con qué descuento y hasta cuándo vale. Por eso cada línea es una

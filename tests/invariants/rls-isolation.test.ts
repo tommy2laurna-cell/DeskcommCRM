@@ -232,7 +232,7 @@ beforeAll(() => {
                     (select id from public.crm_leads where organization_id = v_org limit 1));
         end if;
 
-        -- presupuestos (0277): lo prometido a un cliente, con monto. Vazar a linha
+        -- presupuestos (0298): lo prometido a un cliente, con monto. Vazar a linha
         -- entrega ao vizinho precio, descuento y a quien se le ofrecio.
         -- (sem crase nesta prosa: o bloco inteiro e um template literal de JS.)
         if not exists (select 1 from public.presupuestos where organization_id = v_org) then
@@ -334,7 +334,7 @@ export const TABLES = [
   // controle positivo passaria por acerto. Quem mede a escrita é a rota, em
   // `tests/unit/tarefas-rota-nao-tem-porta-dos-fundos.test.ts`.
   "crm_tasks",
-  // migration 0277 - presupuestos y sus lineas: monto y descuento ofrecidos a un cliente.
+  // migration 0298 - presupuestos y sus lineas: monto y descuento ofrecidos a un cliente.
   "presupuestos",
   "presupuesto_items",
   // 0227 — texto de sugestões: org + visibilidade da conversa por authenticated.

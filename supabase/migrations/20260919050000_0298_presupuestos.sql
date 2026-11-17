@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0277 — PRESUPUESTOS desde un negocio (GC3)
+-- 0298 — PRESUPUESTOS desde un negocio (GC3)
 --
 -- Un presupuesto es lo que se le prometió a un cliente: qué, cuántas unidades,
 -- a qué precio, con qué descuento y hasta cuándo vale. Por eso cada línea es una
