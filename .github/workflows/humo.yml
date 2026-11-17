@@ -41,6 +41,7 @@ jobs:
         kanban-owner-filter.spec.ts importar-leads-planilha.spec.ts
         juntar-contatos-duplicados.spec.ts credenciais-de-ia.spec.ts
         agente-novo-e-uso.spec.ts webhooks.spec.ts
+        captar-formulario.spec.ts entrada-prospectos.spec.ts tablero.spec.ts
     steps:
       - uses: actions/checkout@v7
         with:
