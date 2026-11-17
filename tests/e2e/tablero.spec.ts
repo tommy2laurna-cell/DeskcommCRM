@@ -161,7 +161,7 @@ test.beforeAll(async () => {
   if (m.error) throw new Error(`seed mensajes: ${m.error.message}`);
 });
 
-/** La definición de 0290 escrita de nuevo, a mano, sobre filas leídas directo. */
+/** La definición de 0299 escrita de nuevo, a mano, sobre filas leídas directo. */
 async function esperado(from: string, to: string, owner: string | null) {
   const { data: ls } = await admin.from("crm_leads").select("*").eq("organization_id", ORG);
   const { data: ss } = await admin.from("crm_stages").select("id,pipeline_id,position,is_archived").eq("organization_id", ORG);

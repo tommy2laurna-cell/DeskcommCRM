@@ -26953,8 +26953,8 @@ grant execute on function public.fn_extensions_revert_install(uuid,uuid,uuid,int
 grant execute on function public.fn_extensions_remove_installation(uuid,uuid,uuid,integer) to service_role;
 grant execute on function public.fn_extensions_installation_counts(uuid) to service_role;
 -- END 0271_extensoes_declarativas
--- ---- tablero de ventas (migration 0290) ----
--- 0290_tablero_de_ventas — GC5: tablero del dueño (prospectos por origen,
+-- ---- tablero de ventas (migration 0299) ----
+-- 0299_tablero_de_ventas — GC5: tablero del dueño (prospectos por origen,
 -- alcance por etapa, ventas en ARS, primera respuesta, y lo mismo por usuario).
 --
 -- SECURITY INVOKER: la RLS de crm_leads y conversations define el alcance

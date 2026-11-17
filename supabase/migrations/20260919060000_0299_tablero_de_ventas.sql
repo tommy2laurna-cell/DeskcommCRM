@@ -1,4 +1,4 @@
--- 0290_tablero_de_ventas — GC5: tablero del dueño (prospectos por origen,
+-- 0299_tablero_de_ventas — GC5: tablero del dueño (prospectos por origen,
 -- alcance por etapa, ventas en ARS, primera respuesta, y lo mismo por usuario).
 --
 -- SECURITY INVOKER: la RLS de crm_leads y conversations define el alcance

@@ -1,7 +1,7 @@
 /**
  * Tablero del dueño (GC5): ventana de período, filtros que abren la lista y CSV
  * para Excel argentino (separador «;», coma decimal, BOM UTF-8).
- * Las definiciones de cada número viven en la migración 0290.
+ * Las definiciones de cada número viven en la migración 0299.
  */
 export const PERIODOS = { "7": 7, "30": 30, "90": 90 } as const;
 export type Periodo = keyof typeof PERIODOS;
