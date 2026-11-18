@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Commit a medir (el app, el baseline y el Caddyfile salen de acá; la semilla y la spec, de esta rama). Vacío = este commit."
+        description: "SHA COMPLETO (40) o rama a medir (el app, el baseline y el Caddyfile salen de acá; la semilla y la spec, de esta rama). Vacío = este commit."
         required: false
         default: ""
   pull_request:
