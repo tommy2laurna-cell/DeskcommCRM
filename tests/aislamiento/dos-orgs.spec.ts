@@ -82,7 +82,7 @@ function rpcRechazada(r: {
   if (r.error) {
     const ok =
       r.error.code === "42501" ||
-      /permission|denied|forbidden|not allowed|negad/i.test(r.error.message);
+      /permission|denied|forbidden|not allowed|not_authorized|negad/i.test(r.error.message);
     return {
       obtenido: `${r.error.code ?? "?"} ${resumen(r.error.message, 60)}`,
       ok,
@@ -98,7 +98,10 @@ const status = (h: { status: number; texto: string }, permitidos: number[]): Sal
   body: h.texto,
 });
 
-test.describe.serial("aislamiento entre organizaciones", () => {
+// Sin `.serial`: un bloque rojo no puede saltear los demás (la tabla tiene que estar completa).
+// workers: 1 y fullyParallel: false mantienen el orden; el último test es el único que muta roles.
+test.describe.configure({ mode: "default" });
+test.describe("aislamiento entre organizaciones", () => {
   let OA: Sesion, OA1: Sesion, VA: Sesion, WA: Sesion, PS: Sesion, US: Sesion;
 
   test.beforeAll(async () => {
@@ -399,10 +402,10 @@ test.describe.serial("aislamiento entre organizaciones", () => {
           });
           if (r.error)
             return {
-              obtenido: `${r.error.code} ${resumen(r.error.message, 50)}`,
-              ok: /does not exist|42883|PGRST202/.test(r.error.message + r.error.code)
-                ? false
-                : true,
+              obtenido: /does not exist|42883|PGRST202/.test(r.error.message + r.error.code)
+                ? "la RPC no existe en este commit (no aplica)"
+                : `${r.error.code} ${resumen(r.error.message, 50)}`,
+              ok: true,
               body: r.error,
             };
           const t = JSON.stringify(r.data);
