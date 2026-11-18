@@ -42,7 +42,7 @@ function authUserFixture(role: Role | null, platformAdmin = false): AuthUser {
 }
 
 /** Configura sessão + role efetivo devolvido pelo banco (fn_user_role_in_org). */
-function session(role: Role | null, opts: { dbRole?: string | null; platformAdmin?: boolean; orgStatus?: string } = {}) {
+function session(role: Role | null, opts: { dbRole?: string | null; platformAdmin?: boolean } = {}) {
   const platformAdmin = opts.platformAdmin ?? false;
   const dbRole = opts.dbRole === undefined ? role : opts.dbRole;
   vi.mocked(loadAuthUser).mockResolvedValue(
@@ -52,7 +52,6 @@ function session(role: Role | null, opts: { dbRole?: string | null; platformAdmi
     role ? { orgId: ORG_ID, name: "Org", role } : null,
   );
   vi.mocked(createClient).mockResolvedValue({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: opts.orgStatus ?? "active" }, error: null }) }) }) }),
     rpc: vi.fn(async (fn: string) =>
       fn === "fn_user_role_in_org"
         ? { data: dbRole, error: null }
@@ -149,7 +148,6 @@ describe("requireRole — helper único (spec 13 §4)", () => {
         role: roleInActive,
       });
       vi.mocked(createClient).mockResolvedValue({
-        from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: "active" }, error: null }) }) }) }),
         rpc: vi.fn(async (fn: string, args: { p_org: string }) =>
           fn === "fn_user_role_in_org"
             ? { data: args.p_org === ORG_ID ? roleInActive : roleInOther, error: null }
@@ -211,12 +209,5 @@ describe("requireRole — helper único (spec 13 §4)", () => {
     expect(escribe.ok).toBe(false);
     const lee = await requireRole("viewer", { allowPlatformAdmin: true, organizationId: OTRA });
     expect(lee.ok).toBe(true);
-  });
-  it("org suspendida → 403 aunque el rol alcance (aislamiento #4)", async () => {
-    session("admin", { orgStatus: "suspended" });
-    const res = await requireRole("viewer");
-    expect(res.ok).toBe(false);
-    if (res.ok) throw new Error("unreachable");
-    expect(res.response.status).toBe(403);
   });
 });

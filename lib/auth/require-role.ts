@@ -116,12 +116,6 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
 
   // Role efetivo do banco (não do snapshot do cookie/membership em memória).
   const supabase = await createClient();
-
-  // Aislamiento #4: una org suspendida no sirve datos por la API (la UI ya redirige a /account-suspended).
-  const { data: orgEstado } = await supabase.from("organizations").select("status").eq("id", org.orgId).maybeSingle();
-  if ((orgEstado as { status?: string } | null)?.status === "suspended") {
-    return { ok: false, response: fail("forbidden_tenant", t("Organização suspensa."), 403, { requestId }) };
-  }
   const { data: effectiveRole, error } = await supabase.rpc("fn_user_role_in_org", {
     p_org: org.orgId,
   });

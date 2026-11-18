@@ -5776,8 +5776,10 @@ drop policy if exists "webhook_sources_manager_write" on public.webhook_sources;
 
 create policy "webhook_sources_select" on public.webhook_sources
   for select using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin()
+    -- migration 0300: solo manager lee (path_token); antes cualquier miembro
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
   );
 
 create policy "webhook_sources_manager_write" on public.webhook_sources
@@ -27990,15 +27992,6 @@ drop policy if exists api_tokens_insert_exige_mfa on public.api_tokens;
 create policy api_tokens_insert_exige_mfa on public.api_tokens
   as restrictive for insert to authenticated
   with check (public.fn_session_mfa_proven());
-
--- ---- webhook_sources: solo gerente lee path_token (migration 0300) ----
-drop policy if exists "webhook_sources_select" on public.webhook_sources;
-create policy "webhook_sources_select" on public.webhook_sources
-  for select using (
-    public.fn_is_platform_admin()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'manager'))
-  );
 
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
