@@ -19,6 +19,11 @@ name: aislamiento
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit a medir (el app, el baseline y el Caddyfile salen de acá; la semilla y la spec, de esta rama). Vacío = este commit."
+        required: false
+        default: ""
   pull_request:
   push:
     branches: [audit/aislamiento-2orgs]
@@ -46,6 +51,16 @@ jobs:
       AISLAMIENTO_OUT: aislamiento-out
     steps:
       - uses: actions/checkout@v7
+
+      # El código MEDIDO va a objetivo/; las pruebas (semilla, spec) son las de esta rama.
+      # Así se puede correr el gate sobre un commit viejo que no las tiene (el «falla antes»).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          path: objetivo
+
+      - name: Commit medido
+        run: echo "OBJETIVO_SHA=$(git -C objetivo rev-parse HEAD)" | tee -a "$GITHUB_ENV"
       - uses: ./.github/actions/preparar-node
         timeout-minutes: 5
 
@@ -54,8 +69,8 @@ jobs:
       - name: Compilar la imagen del app (este commit)
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Dockerfile
+          context: objetivo
+          file: objetivo/Dockerfile
           load: true
           tags: aislamiento/app:ci
           cache-from: type=gha,scope=aislamiento-app
@@ -64,8 +79,8 @@ jobs:
       - name: Compilar la imagen del worker (este commit)
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Dockerfile.worker
+          context: objetivo
+          file: objetivo/Dockerfile.worker
           load: true
           tags: aislamiento/worker:ci
           cache-from: type=gha,scope=aislamiento-worker
@@ -92,7 +107,7 @@ jobs:
           create extension if not exists citext with schema public;
           create extension if not exists pg_trgm with schema public;
           SQL
-          psql "$DB" -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -q -f objetivo/supabase/baseline.sql
           IDS=$(docker ps -q --filter name=supabase_realtime)
           [ -n "$IDS" ] || { echo "::error::Sin contenedor supabase_realtime"; exit 1; }
           docker restart $IDS >/dev/null
@@ -143,7 +158,7 @@ jobs:
             # apaga el TLS automático; `app` resuelve al host, donde escucha el app.
             docker run -d --name caddy --network host --add-host app:127.0.0.1 \
               -e DOMAIN=http://localhost:8080 -e ACME_EMAIL=ci@example.invalid \
-              -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine
+              -v "$PWD/objetivo/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine
           fi
           for i in $(seq 1 60); do
             curl -fsS -o /dev/null "$AISLAMIENTO_BASE_URL/login" && { echo "app arriba en ~$((i*3))s vía $AISLAMIENTO_BASE_URL"; exit 0; }
