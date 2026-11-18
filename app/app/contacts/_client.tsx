@@ -28,6 +28,8 @@ const SOURCE_OPTIONS = [
   { value: undefined, label: "Todas as origens" },
   { value: "manual", label: "Manual" },
   { value: "whatsapp", label: "WhatsApp" },
+  { value: "formulario", label: "Formulário ou QR" },
+  { value: "chat_web", label: "Chat da web" },
   { value: "nuvemshop", label: "Nuvemshop" },
   { value: "import_csv", label: "Importado (CSV)" },
   // Os dois valores que a atribuição de anúncio grava em `contacts.source`
@@ -38,6 +40,12 @@ const SOURCE_OPTIONS = [
   // porta — e ela estava incompleta desde que a atribuição passou a existir.
   { value: "meta_ads", label: "Anúncio da Meta" },
   { value: "google_ads", label: "Anúncio do Google" },
+  // Entrada de prospectos por API (n8n): `contacts.source` es el origen que mandó
+  // la automatización; estos son los que la documentación recomienda.
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "formulario_web", label: "Formulário da web" },
+  { value: "api", label: "Automação (API)" },
 ];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -49,6 +57,7 @@ export function ContactsListClient() {
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState<string | undefined>(undefined);
   const [source, setSource] = useState<string | undefined>(undefined);
+  const [campaign, setCampaign] = useState("");
   const [orderBy, setOrderBy] = useState<ContactOrderBy>("last_activity_at");
   const [orderDir, setOrderDir] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState<number>(25);
@@ -62,8 +71,8 @@ export function ContactsListClient() {
   }, [searchInput]);
 
   const filters = useMemo(
-    () => ({ search, tag, source, order_by: orderBy, order_dir: orderDir, limit }),
-    [search, tag, source, orderBy, orderDir, limit],
+    () => ({ search, tag, source, campaign: campaign.trim() || undefined, order_by: orderBy, order_dir: orderDir, limit }),
+    [search, tag, source, campaign, orderBy, orderDir, limit],
   );
   const q = useContactList(filters);
 
@@ -183,6 +192,14 @@ export function ContactsListClient() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <Input
+          aria-label={t("Campanha")}
+          placeholder={t("Campanha")}
+          className="h-8 w-36"
+          value={campaign}
+          onChange={(e) => setCampaign(e.target.value)}
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -200,7 +217,7 @@ export function ContactsListClient() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {(search || tag || source) && (
+        {(search || tag || source || campaign) && (
           <Button
             variant="ghost"
             size="sm"
@@ -209,6 +226,7 @@ export function ContactsListClient() {
               setSearch("");
               setTag(undefined);
               setSource(undefined);
+              setCampaign("");
             }}
           >
             {t("Limpar filtros")}

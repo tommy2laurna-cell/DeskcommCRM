@@ -38,6 +38,7 @@ import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ApiError } from "@/lib/api/types";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
+import { esReenvioInterno } from "@/lib/captar/reenvio-interno";
 import { kickLocalPipeline } from "@/lib/dev/kick-local-pipeline";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,18 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (srcErr) return fail("internal_error", srcErr.message, 500, { requestId });
   if (!source || !source.is_active) {
     return fail("not_found", "unknown webhook token", 404, { requestId });
+  }
+
+  // Las fuentes de un formulario/encuesta público solo reciben envíos que pasaron por
+  // `/captar/publico/[slug]` (antispam y consentimiento). Por la URL con el token: 404.
+  if (!esReenvioInterno(req)) {
+    const { data: deFormulario } = await admin
+      .from("capture_forms")
+      .select("id")
+      .eq("webhook_source_id", source.id)
+      .limit(1)
+      .maybeSingle();
+    if (deFormulario) return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 
   const rawBody = await req.text();
