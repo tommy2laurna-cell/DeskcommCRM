@@ -18,7 +18,7 @@ import { assertServiceBoundarySupabase } from "@/lib/atendimento/origem";
  *        pipeline dele, se o tenant tiver criado essa etapa (opt-in — ver
  *        `lib/leads/handoff-stage-move.ts`). Pipeline sem essa etapa: no-op.
  *   3. emit_event('ai.handoff_triggered') no event_log
- *   4. Realtime broadcast no channel 'org:<org>:queue' (event 'handoff_pending')
+ *   4. (removido: broadcast público `org:<org>:queue` sem assinante vazava entre orgs)
  *   5. api_audit_log action='ai.handoff_triggered'
  *
  * IMPORTANTE: nunca propaga exceção pro caller. O worker chamador segue feliz.
@@ -253,25 +253,6 @@ export async function triggerHandoff(
       logger.warn("[handoff-orchestrator] emit_event failed", {
         conversation_id: input.conversationId,
         error: (emitErr as { message?: string }).message ?? String(emitErr),
-      });
-    }
-
-    // Step 4 — Realtime broadcast so the agent UI lights up immediately.
-    try {
-      const channel = admin.channel(`org:${input.organizationId}:queue`);
-      await channel.send({
-        type: "broadcast",
-        event: "handoff_pending",
-        payload: {
-          conversation_id: input.conversationId,
-          reason: input.reason,
-        },
-      });
-      await admin.removeChannel(channel);
-    } catch (err) {
-      logger.warn("[handoff-orchestrator] realtime broadcast failed", {
-        conversation_id: input.conversationId,
-        error: err instanceof Error ? err.message : String(err),
       });
     }
 

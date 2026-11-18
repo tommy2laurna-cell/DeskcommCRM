@@ -27991,6 +27991,15 @@ create policy api_tokens_insert_exige_mfa on public.api_tokens
   as restrictive for insert to authenticated
   with check (public.fn_session_mfa_proven());
 
+-- ---- webhook_sources: solo gerente lee path_token (migration 0300) ----
+drop policy if exists "webhook_sources_select" on public.webhook_sources;
+create policy "webhook_sources_select" on public.webhook_sources
+  for select using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --
 -- ⚠️ ESTA CHAMADA É O ÚLTIMO BLOCO DO ARQUIVO. Tabela nova, coluna
