@@ -2,18 +2,16 @@
  * GET /api/v1/cron/lgpd-sla-watcher
  *
  * Daily cron (09:00 BRT / 12:00 UTC) — scans active lgpd_requests and fires
- * SLA alarms when requests are approaching / past their threshold:
- *   - data_request  → alarm if received_at <= now - 5 days  (D+5)
- *   - redact / store_redact → alarm if received_at <= now - 10 days (D+10)
+ * SLA alarms when the request is within MARGEM_DE_AVISO_MS of its `due_at`, or
+ * past it. `due_at` already carries the Ley 25.326 deadline (lib/lgpd/sla.ts):
+ * antes o alarme saía em received_at + 5/10 dias corridos, e com supressão em
+ * 5 dias hábeis isso avisava DEPOIS do vencimento.
  *
  * Auth: `Authorization: Bearer <INTERNAL_CRON_SECRET|INTERNAL_SECRET>` (fail-closed).
  * Audit: emite `lgpd.sla_watcher_run` quando houve alarme, dedup ou erro — tick
  *   de instalação sem solicitação vencida NÃO audita (ver a guarda "cron que não
  *   fez nada não audita", vigiada por `cron-audita-so-quando-ha-efeito.test.ts`).
  *
- * MVP: calendar-day approximation for SELECT is intentional and acceptable
- * (D+5 corridos ≈ D+5 úteis in short windows). Precision via computeDueAt
- * deferred to v2.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -31,6 +29,12 @@ export const dynamic = "force-dynamic";
 
 /** Max requests processed per cron invocation (safety cap). */
 const SCAN_LIMIT = 500;
+
+/**
+ * Aviso operacional, não prazo legal: 2 dias antes do vencimento. O cron roda
+ * uma vez por dia, então 2 dias dão ao menos um aviso antes de vencer.
+ */
+const MARGEM_DE_AVISO_MS = 2 * 86_400_000;
 
 interface OrgRow {
   dpo_email: string | null;
@@ -62,7 +66,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   // ────────────────────────────────────────────────────────────────────────
   // Query — system-wide scan via admin client (bypasses RLS intentionally;
   //          this is a platform-level cron, not a tenant-scoped request)
-  // MVP: corridos OK; precision via computeDueAt deferred to v2
   // ────────────────────────────────────────────────────────────────────────
   const supabaseAdmin = createAdminClient();
 
@@ -78,16 +81,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     `,
     )
     .not("status", "in", '("completed","failed")')
-    .or(
-      [
-        "and(request_type.eq.data_request,received_at.lte." +
-          new Date(Date.now() - 5 * 86_400_000).toISOString() +
-          ")",
-        "and(request_type.in.(redact,store_redact),received_at.lte." +
-          new Date(Date.now() - 10 * 86_400_000).toISOString() +
-          ")",
-      ].join(","),
-    )
+    .lte("due_at", new Date(Date.now() + MARGEM_DE_AVISO_MS).toISOString())
+    .order("due_at", { ascending: true })
     .limit(SCAN_LIMIT);
 
   if (queryError) {

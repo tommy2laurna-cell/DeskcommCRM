@@ -57,6 +57,8 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
     return { ok: false, response: fail("unauthenticated", "Auth required.", 401, { requestId }) };
   }
   const t = (texto: string) => traduzir(texto, user.idioma);
+  // support_readonly mira (rank viewer) pero no escribe en otro tenant: antes anonimizaba contactos de B.
+  const plataformaPuede = user.is_platform_admin && (user.platform_admin_scope !== "support_readonly" || min === "viewer");
 
   if (user.support && user.support.status !== "active") {
     return { ok: false, response: fail("forbidden", "O acompanhamento terminou. Saia para continuar.", 403, { requestId }) };
@@ -72,7 +74,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
           name: membership.organization_name,
           role: membership.role,
         }
-      : allowPlatformAdmin && user.is_platform_admin
+      : allowPlatformAdmin && plataformaPuede
         ? { orgId: organizationId, name: "—", role: "viewer" }
         : null;
   } else {
@@ -85,7 +87,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
     };
   }
 
-  if (allowPlatformAdmin && user.is_platform_admin && !user.support) {
+  if (allowPlatformAdmin && plataformaPuede && !user.support) {
     // El platform admin salta el rank del tenant, NO el MFA de sesión (H4): con
     // aal1 y TOTP sin probar anonimizaba contactos o borraba canales de otro tenant.
     if (await mfaEmDivida()) {

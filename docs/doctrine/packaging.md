@@ -45,11 +45,10 @@ Se a resposta for "o cliente", a peça está errada e vira imagem publicada.
 | O que **nunca** fazemos | publicar da máquina de um dev | republicar, embalar ou copiar |
 | Se quebrar | é bug nosso, com forward-fix | é incidente de fornecedor, com pin de escape |
 
-**Ressalva medida:** `redis:7-alpine` e `caddy:2-alpine` flutuam dentro do major — as duas
-se moveram no Docker Hub em 2026. São dependências de infraestrutura sem estado de negócio, e
-o custo de bumpá-las a cada release não se paga hoje; o item 4 do checklist manda revisitá-las.
-`waha` e `srh` — que tocam WhatsApp e rate limit — estão pinadas de verdade (tag exata e
-digest). O gate reprova tag ausente ou `:latest`, não o major flutuante.
+**Ressalva medida (atualizada 2026-11-17):** `redis:7-alpine` e `caddy:2-alpine` estão
+pinadas por digest no `docker-compose.prod.yml` (a tag fica só como leitura). Bumpar = medir o
+digest novo e trocar a linha. `waha` e `srh` — que tocam WhatsApp e rate limit — já estavam
+pinadas (tag exata e digest). O gate reprova tag ausente ou `:latest`.
 
 **Nenhuma peça upstream vira imagem nossa.** Não por preguiça: WAHA Plus é licenciado, e
 redistribuir o binário de terceiro dentro de uma imagem nossa é passivo jurídico numa

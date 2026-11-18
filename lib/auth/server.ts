@@ -159,7 +159,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     await Promise.all([
       supabase
         .from("platform_admins")
-        .select("user_id, revoked_at")
+        .select("user_id, scope, revoked_at")
         .eq("user_id", user.id)
         .is("revoked_at", null)
         .maybeSingle(),
@@ -241,6 +241,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     full_name: fullName,
     avatar_url: avatarUrl,
     is_platform_admin: !!paRow,
+    platform_admin_scope: (paRow as { scope?: string } | null)?.scope === "full" ? "full" : paRow ? "support_readonly" : null,
     locale,
     idioma,
     timezone,

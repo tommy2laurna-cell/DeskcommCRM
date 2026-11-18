@@ -492,7 +492,7 @@ async function vetoPorTetoDeGasto(alvo: {
   // `triggerHandoff` é o irmão local de `performHumanHandoff` (este worker não
   // pode importar o engine sem arrastar `pg` e o SDK para o bundle do Next) e faz
   // o mesmo: `status='pending'`, `bot_silenced_until='infinity'`, atividade na
-  // timeline, broadcast em `org:<org>:queue` e auditoria. A razão é a MESMA
+  // timeline e auditoria. A razão é a MESMA
   // constante que o engine grava.
   //
   // Nunca lança (contrato do orquestrador), então uma falha aqui não impede a
