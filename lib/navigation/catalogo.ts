@@ -182,6 +182,27 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // Filtros guardados (etiqueta, etapa, origem, pontuação...). A lista se
+    // recalcula a cada leitura; é a base das campanhas.
+    href: "/app/listas",
+    label: "Listas inteligentes",
+    description: "Grupos de contatos que se atualizam sozinhos, por etiqueta, etapa, origem ou aniversário.",
+    icon: "Users",
+    group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
+  },
+  {
+    // Mensagem aprovada da Meta enviada a uma lista, só pela API oficial.
+    href: "/app/campanas",
+    label: "Campanhas",
+    description: "Envie uma mensagem aprovada da Meta a uma lista, com prévia, custo e botão de saída.",
+    icon: "Flag",
+    group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ
@@ -451,6 +472,15 @@ export const NAV_CATALOG = [
     // navegável. Para voltar a mostrá-la, basta devolver `sidebar: true`.
   },
   {
+    href: "/app/captar",
+    label: "Captar",
+    description: "Formulários, pesquisas e códigos QR para trazer contatos de fora do WhatsApp.",
+    icon: "QrCode",
+    group: "canais",
+    minRole: "manager",
+    sidebar: true,
+  },
+  {
     href: "/app/webhooks",
     label: "Webhooks",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",
@@ -488,22 +518,10 @@ export const NAV_CATALOG = [
     section: "Os números do período",
     sidebar: true,
   },
-  {
-    // Logo abaixo de Desempenho porque responde a metade da MESMA pergunta: lá
-    // está o que aconteceu depois que a pessoa chegou; aqui, quanto custou
-    // trazê-la. Ler as duas juntas é o que fecha a conta do custo por cliente.
-    href: "/app/ads/meta",
-    label: "Meta Ads",
-    description: "Quanto custou cada resultado das campanhas que trazem gente para cá.",
-    icon: "Megaphone",
-    group: "analise",
-    section: "Os números do período",
-    // `manager`, e não o `viewer` de Desempenho: aqui não há recorte por
-    // pessoa — orçamento e criativo são da empresa inteira. Mesmo grau dos
-    // outros dois vizinhos do grupo.
-    minRole: "manager",
-    sidebar: true,
-  },
+  // Meta Ads (/app/ads/meta y /app/settings/meta-ads) fora do menu por decisão
+  // de 2026-11-12: o Conectado não vende anúncios. As telas e o envio de
+  // conversões continuam vivos; só some a porta. Vigiado em
+  // tests/unit/navegacao-meta-ads-oculto.test.ts.
   {
     // Irmã de "Desempenho", não a mesma coisa: lá é DESFECHO (funil agora,
     // ganho/perdido por atendente); aqui é o TRABALHO que aconteceu no
@@ -573,12 +591,53 @@ export const NAV_CATALOG = [
     section: "Sua empresa",
   },
   {
+    // Reseñas pós-venda: link do Google + mensagem aprovada que o cron
+    // `cron/review-requests` envia N dias depois de ganhar um negócio.
+    href: "/app/settings/resenas",
+    label: "Avaliações",
+    description: "O link de avaliações do Google que o cliente recebe alguns dias depois de fechar.",
+    icon: "Flag",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    // Quem indicou quem: lê `contacts.referred_by_contact_id` (campo da ficha).
+    href: "/app/analise/referidos",
+    label: "Quem traz mais clientes",
+    description: "Quem mais indicou clientes e quantos deles fecharam negócio.",
+    icon: "UsersThree",
+    group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
+  },
+  {
+    // Os dois cartões de reativação: contatos dormidos e aniversários da semana.
+    href: "/app/analise/reativar",
+    label: "Dormidos e aniversários",
+    description: "Quem está sem movimento há semanas e quem faz aniversário nesta semana.",
+    icon: "ClockCountdown",
+    group: "analise",
+    section: "Os números do período",
+  },
+  {
     // A porta que faltava (issue #144): rodízio de atendimento e restrição de
     // visibilidade existiam inteiros no backend e não tinham NENHUMA tela — só
     // dava para ligar com UPDATE à mão no banco.
     href: "/app/settings/atendimento",
     label: "Distribuição de atendimento",
     description: "Quem recebe cada cliente novo, e o que cada atendente enxerga.",
+    icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    // Las reglas del puntaje de prioridad: `manager`, porque cambian el orden del
+    // tablero para todo el equipo.
+    href: "/app/settings/puntaje",
+    label: "Puntaje de prioridad",
+    description: "Las reglas que ordenan a quién llamar primero en el tablero.",
     icon: "UsersThree",
     group: "organizacao",
     section: "Sua empresa",
@@ -630,25 +689,6 @@ export const NAV_CATALOG = [
     // `admin` pelo mesmo critério das vizinhas: o token grava na conta de
     // anúncios da empresa, e quem o troca decide para onde vai o dinheiro de
     // mídia. Um `manager` ficaria acima de billing na mesma prancheta.
-    minRole: "admin",
-  },
-  {
-    // Vizinha de Conversões, e SEPARADA dela de propósito. As duas conectam "a
-    // Meta" e a tentação de fundi-las é real — mas são credenciais de escopos
-    // diferentes, em tabelas diferentes (0214), com consequências opostas
-    // quando vencem: o token de leitura vencido deixa uma tela vazia, o de
-    // conversões vencido faz a empresa parar de reportar vendas sem sintoma.
-    // Uma tela só, com dois campos de token parecidos, é como se cola o token
-    // errado no campo errado e se perde uma semana achando que quebrou.
-    href: "/app/settings/meta-ads",
-    label: "Meta Ads",
-    description: "Conectar a conta de anúncios para ler o desempenho das campanhas.",
-    icon: "Megaphone",
-    group: "organizacao",
-    section: "Sua empresa",
-    // `admin` pelo mesmo critério da vizinha, mesmo o token sendo só de
-    // leitura: ele expõe orçamento e performance da conta inteira, e quem
-    // apenas LÊ a tela (`manager`) não precisa poder trocar a credencial.
     minRole: "admin",
   },
   {

@@ -106,6 +106,25 @@ describe("resolveAuthDual", () => {
     expect(r.response.status).toBe(403);
   });
 
+  it("scope de mínimo privilégio: prospectos:write NO es mcp:write, y viceversa", async () => {
+    const opciones = { ...OPCOES, scope: "prospectos:write" };
+    const conScopes = async (scopes: string[]) => {
+      vi.mocked(validateBearerToken).mockResolvedValue({
+        organizationId: ORG_DO_TOKEN,
+        scopes,
+        role: "agent",
+        actor: { type: "api_token", id: "tok-1" },
+      } as never);
+      return resolveAuthDual(req({ authorization: "Bearer dsk_abc" }), opciones);
+    };
+    // Un token del n8n (solo prospectos:write) entra a la ruta de prospectos...
+    expect((await conScopes(["prospectos:write"])).ok).toBe(true);
+    // ...y uno con mcp:write (todo el MCP de escritura) ya NO sirve ahí.
+    const r = await conScopes(["mcp:read", "mcp:write"]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.response.status).toBe(403);
+  });
+
   it("token inválido fecha em 401 e não cai na sessão", async () => {
     vi.mocked(validateBearerToken).mockRejectedValue(
       new McpAuthError(-32001, 401, "Token inválido."),

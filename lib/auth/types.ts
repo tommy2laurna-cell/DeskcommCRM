@@ -85,6 +85,8 @@ export interface AuthUser {
   full_name: string | null;
   avatar_url: string | null;
   is_platform_admin: boolean;
+  /** `full` escribe en otros tenants; `support_readonly` solo mira (no salta el rank del tenant). */
+  platform_admin_scope?: "full" | "support_readonly" | null;
   /**
    * Idioma da interface, de `user_metadata.locale`.
    *

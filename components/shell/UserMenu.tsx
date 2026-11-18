@@ -35,7 +35,7 @@ export function UserMenu() {
       <ThemeToggle />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="rounded-full" aria-label={t("Menu do usuário")}>
+          <Button variant="ghost" size="icon" className="rounded-full" aria-label={`${initials(user.full_name, user.email)} — ${t("Menu do usuário")}`}>
             <Avatar className="h-8 w-8">
               {user.avatar_url && <AvatarImage src={user.avatar_url} alt="" />}
               <AvatarFallback>{initials(user.full_name, user.email)}</AvatarFallback>

@@ -97,17 +97,17 @@ describe("`fallback_at` pelo `.env` — o caminho que existe", () => {
   });
 
   it("(b) cor boa NÃO acende — o alarme apaga, que é a outra metade do laço", () => {
-    // `#0b3d2e` não é neutro: ele produz motivos (`accent_deslocado` e
-    // `redundancia_nao_cromatica_necessaria`, medidos). É o caso que separa
+    // `#0a7d5a` não é neutro: ele produz motivos (`accent_deslocado` e
+    // `semantica_deslocada`, medidos). É o caso que separa
     // `CODIGOS_DE_RECUSA` de "qualquer motivo" — uma implementação ingênua
     // deixaria `fallback_at` aceso em quase toda marca, e alarme sempre aceso é
     // alarme que ninguém lê.
     const marca = resolverMarca(
-      [camadaDoAmbiente({ APP_ACCENT_HEX: "#0b3d2e" })],
+      [camadaDoAmbiente({ APP_ACCENT_HEX: "#0a7d5a" })],
       REGUA_DO_PRODUTO,
     );
     expect(marca.motivos.length).toBeGreaterThan(0);
-    expect(fallbackDoAmbiente("#0b3d2e")).toBeNull();
+    expect(fallbackDoAmbiente("#0a7d5a")).toBeNull();
 
     // Chave declarada e vazia é o estado de fábrica do `install.sh`, não defeito.
     expect(fallbackDoAmbiente("")).toBeNull();
@@ -177,7 +177,7 @@ describe("`fallback_at` pela tela — o caminho que não existe", () => {
       platformBrandingSchema.safeParse({
         app_name: "Revenda XPTO",
         logo_url: null,
-        accent_hex: "#0b3d2e",
+        accent_hex: "#0a7d5a",
         show_powered_by: true,
       }).success,
     ).toBe(true);

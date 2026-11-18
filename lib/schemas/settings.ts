@@ -270,3 +270,18 @@ export function clientePelaAgendaLigado(settings: unknown): boolean {
       : undefined;
   return crmSettingsSchema.parse(crm ?? {}).cliente_pela_agenda === true;
 }
+
+/**
+ * organizations.settings.reviews — el pedido de reseña tras ganar un negocio.
+ * `.catch` en la lectura: una config vieja o rota no puede tumbar la pantalla
+ * que sirve para arreglarla. Sin link o sin mensaje aprobado el cron no envía.
+ */
+export const reviewsSettingsSchema = z.object({
+  google_review_url: z.string().trim().url().max(500).or(z.literal("")).default(""),
+  dias_despues: z.number().int().min(0).max(30).default(3),
+  mensaje_aprobado_nombre: z.string().trim().max(512).default(""),
+  mensaje_aprobado_idioma: z.string().trim().max(16).default(""),
+});
+export type ReviewsSettings = z.infer<typeof reviewsSettingsSchema>;
+export const REVIEWS_SETTINGS_PADRAO: ReviewsSettings = reviewsSettingsSchema.parse({});
+export const reviewsSettingsLeituraSchema = reviewsSettingsSchema.catch(REVIEWS_SETTINGS_PADRAO);

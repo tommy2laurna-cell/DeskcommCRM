@@ -139,6 +139,7 @@ export const AUDIT_ACTIONS = [
   "lgpd.tenant_redacted",
   "lgpd.consent_changed",
   "lgpd.manually_approved",
+  "lgpd.request_created",
   "webhook.hmac_invalid",
   "lgpd.sla_alarm_triggered",
   "lgpd.sla_watcher_run",
@@ -240,6 +241,14 @@ export const AUDIT_ACTIONS = [
   "leads.bulk_assigned",
   "attendant.availability_changed",
   "routing.config_changed",
+  // Cambiar las reglas del puntaje cambia quién aparece primero para todo el
+  // equipo: es configuración de la organización, no preferencia de pantalla.
+  "puntaje.config_changed",
+  // Presupuestos: crear, aceptar y emitir el recibo. Lo que se le prometió a un
+  // cliente tiene que poder reconstruirse (quién, cuándo, por cuánto).
+  "presupuesto.created",
+  "presupuesto.accepted",
+  "presupuesto.recibo_issued",
   // Mudar a régua do abandono (spec 16 §5.2) muda como TODO período passa a ser
   // lido — é mutação relevante, não preferência de exibição.
   "metrics.atrito_regua_changed",
@@ -253,6 +262,9 @@ export const AUDIT_ACTIONS = [
   "webhook.source_created",
   "webhook.source_updated",
   "webhook.source_deleted",
+  "captar.form_created",
+  "captar.form_updated",
+  "captar.form_deleted",
   "webhook.lead_received",
   "webhook.inbound_invalid_signature",
   "automation.rule_created",
@@ -590,6 +602,21 @@ export const AUDIT_ACTIONS = [
   // "quando esta chave foi trocada, e por quem" é a pergunta que só esta linha
   // responde — a coluna `updated_at` se move por qualquer motivo.
   "ai.credential_updated",
+  // Reseñas y referidos (migración 0293).
+  "reviews.config_changed",
+  "reviews.pedido_enviado",
+  "contact.referred_by_changed",
+  // Listas inteligentes y campañas por la API de Meta (migraciones 0294/0295).
+  "smart_list.created",
+  "smart_list.updated",
+  "smart_list.deleted",
+  "campaign.created",
+  "campaign.updated",
+  "campaign.deleted",
+  "campaign.confirmed",
+  "campaign.cancelled",
+  "campaign.batch_sent",
+  "campaign.tarifa_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

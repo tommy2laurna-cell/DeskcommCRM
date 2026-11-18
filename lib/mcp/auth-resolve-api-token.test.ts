@@ -88,9 +88,24 @@ type Resposta = { data: LinhaDoToken | null; error: { message: string } | null }
  * pedida; `update(...).eq(...)` é thenable, como o builder real — é assim que o
  * `last_used_at` sem `await` se resolve.
  */
-function adminDeTokens(resposta: Resposta, reg: Registro) {
+function adminDeTokens(resposta: Resposta, reg: Registro, extra: Extra = {}) {
   return {
     from: (tabela: string) => {
+      // Aislamiento #3-#6: estado de la org y rol actual de quien creó el token
+      if (tabela === "organizations" || tabela === "user_organizations") {
+        const dado =
+          tabela === "organizations"
+            ? { status: extra.orgStatus ?? "active" }
+            : extra.rolDelCriador === null
+              ? null
+              : { role: extra.rolDelCriador ?? "admin" };
+        const c: Record<string, unknown> = {};
+        c.select = () => c;
+        c.eq = () => c;
+        c.is = () => c;
+        c.maybeSingle = async () => ({ data: dado, error: null });
+        return c;
+      }
       if (tabela !== "api_tokens") throw new Error(`tabela inesperada: ${tabela}`);
       return {
         select: (colunas: string) => {
@@ -118,9 +133,15 @@ function adminDeTokens(resposta: Resposta, reg: Registro) {
   };
 }
 
-function armar(resposta: Resposta): Registro {
+interface Extra {
+  orgStatus?: string;
+  /** `null` = quien creó el token ya no está en la org. */
+  rolDelCriador?: string | null;
+}
+
+function armar(resposta: Resposta, extra: Extra = {}): Registro {
   const reg: Registro = { colunas: [], filtros: [], updates: [], idsAtualizados: [] };
-  vi.mocked(createAdminClient).mockReturnValue(adminDeTokens(resposta, reg) as never);
+  vi.mocked(createAdminClient).mockReturnValue(adminDeTokens(resposta, reg, extra) as never);
   return reg;
 }
 
@@ -187,6 +208,30 @@ describe("resolveApiToken — os cinco motivos de recusa", () => {
     // A distinção é o que separa 500 de 401 lá na casca. Se as duas colapsarem,
     // um banco fora do ar passa a ser reportado ao cliente como token ruim.
     expect(await reasonDe(PLAINTEXT)).toBe("lookup_failed");
+  });
+});
+
+describe("resolveApiToken — aislamiento entre orgs (#3 a #6)", () => {
+  it("org suspendida: el token no sirve", async () => {
+    armar(achou(linhaViva()), { orgStatus: "suspended" });
+    await expect(resolveApiToken(PLAINTEXT)).rejects.toMatchObject({ reason: "revoked" });
+  });
+
+  it("quien creó el token ya no está en la org: el token no sirve", async () => {
+    armar(achou(linhaViva()), { rolDelCriador: null });
+    await expect(resolveApiToken(PLAINTEXT)).rejects.toMatchObject({ reason: "revoked" });
+  });
+
+  it("admin degradado a viewer: el role:admin del token baja a role:viewer", async () => {
+    armar(achou(linhaViva({ scopes: ["mcp:write", "role:admin"] })), { rolDelCriador: "viewer" });
+    const r = await resolveApiToken(PLAINTEXT);
+    expect(r.scopes).toEqual(["mcp:write", "role:viewer"]);
+  });
+
+  it("token de agente IA no depende del rol de quien lo creó", async () => {
+    const scopes = ["mcp:read", "actor:ai_agent", "role:ai_operator"];
+    armar(achou(linhaViva({ scopes })), { rolDelCriador: null });
+    await expect(resolveApiToken(PLAINTEXT)).resolves.toMatchObject({ scopes });
   });
 });
 

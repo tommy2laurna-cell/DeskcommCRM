@@ -5776,8 +5776,10 @@ drop policy if exists "webhook_sources_manager_write" on public.webhook_sources;
 
 create policy "webhook_sources_select" on public.webhook_sources
   for select using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin()
+    -- migration 0300: solo manager lee (path_token); antes cualquier miembro
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
   );
 
 create policy "webhook_sources_manager_write" on public.webhook_sources
@@ -18289,7 +18291,8 @@ returns setof uuid language sql stable security definer set search_path = public
 $f$;
 create or replace function public.fn_user_role_in_org(p_org uuid)
 returns text language sql stable security definer set search_path = public as $f$
- select case when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
+ select case when not exists (select 1 from public.organizations o where o.id=p_org and o.status='active') then null
+ when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
  then case when s->>'access_mode'='full' then 'admin' else 'viewer' end
  else (select role from public.user_organizations where user_id=auth.uid() and organization_id=p_org and revoked_at is null limit 1) end
  from (select public.fn_support_context() s) c;
@@ -26953,6 +26956,116 @@ grant execute on function public.fn_extensions_revert_install(uuid,uuid,uuid,int
 grant execute on function public.fn_extensions_remove_installation(uuid,uuid,uuid,integer) to service_role;
 grant execute on function public.fn_extensions_installation_counts(uuid) to service_role;
 -- END 0271_extensoes_declarativas
+-- ---- tablero de ventas (migration 0299) ----
+-- 0299_tablero_de_ventas — GC5: tablero del dueño (prospectos por origen,
+-- alcance por etapa, ventas en ARS, primera respuesta, y lo mismo por usuario).
+--
+-- SECURITY INVOKER: la RLS de crm_leads y conversations define el alcance
+-- (vendedor = lo suyo, dueño/gerente = todo). Nunca cross-tenant: p_org sale de
+-- la org activa en la ruta. Ventana semiabierta [from,to). Solo lectura.
+--
+-- Definiciones (las mismas que usa la lista al tocar el número):
+--  * prospectos nuevos  = crm_leads.created_at en la ventana, agrupado por source.
+--  * alcanzó la etapa   = lead creado en la ventana que está HOY en esa etapa o
+--                         más adelante (position >=) o ya fue ganado.
+--  * ventas             = leads status='won' con closed_at en la ventana;
+--                         monto = suma de value_cents solo de currency='ARS'.
+--  * 1ª respuesta       = promedio de la primera respuesta humana (igual que 0037).
+create or replace function public.fn_tablero_metrics(
+  p_org uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_owner uuid default null
+) returns jsonb
+language sql stable
+set search_path = public
+as $$
+  with
+  -- El vendedor ve solo lo suyo AUNQUE llame a la RPC directo con su JWT: el owner se fuerza acá,
+  -- no solo en la ruta. Dueño/gerente (manager+) eligen p_owner; el resto queda en auth.uid().
+  par as (
+    select case when public.fn_role_at_least(p_org, 'manager') then p_owner else auth.uid() end as o
+  ),
+  nuevos as (
+    select l.id, l.source, l.owner_user_id, l.status, l.stage_id, l.pipeline_id, s.position
+    from public.crm_leads l
+    join public.crm_stages s on s.id = l.stage_id
+    where l.organization_id = p_org
+      and l.created_at >= p_from and l.created_at < p_to
+      and ((select o from par) is null or l.owner_user_id = (select o from par))
+  ),
+  ganados as (
+    select owner_user_id, value_cents, currency
+    from public.crm_leads
+    where organization_id = p_org and status = 'won'
+      and closed_at >= p_from and closed_at < p_to
+      and ((select o from par) is null or owner_user_id = (select o from par))
+  ),
+  perdidos as (
+    select owner_user_id from public.crm_leads
+    where organization_id = p_org and status = 'lost'
+      and closed_at >= p_from and closed_at < p_to
+      and ((select o from par) is null or owner_user_id = (select o from par))
+  ),
+  resp as (
+    select c.assigned_to_user_id as user_id,
+           extract(epoch from (fr.first_human_out - fr.first_in)) as secs
+    from public.conversations c
+    cross join lateral (
+      select
+        min(m.sent_at) filter (where m.direction = 'inbound') as first_in,
+        min(m.sent_at) filter (where m.direction = 'outbound' and m.sent_by_user_id is not null) as first_human_out
+      from public.messages m where m.conversation_id = c.id
+    ) fr
+    where c.organization_id = p_org
+      and c.assigned_to_user_id is not null
+      and ((select o from par) is null or c.assigned_to_user_id = (select o from par))
+      and fr.first_in is not null and fr.first_human_out is not null
+      and fr.first_human_out > fr.first_in
+      and fr.first_human_out >= p_from and fr.first_human_out < p_to
+  ),
+  usuarios as (
+    select owner_user_id as user_id from nuevos where owner_user_id is not null
+    union select owner_user_id from ganados where owner_user_id is not null
+    union select owner_user_id from perdidos where owner_user_id is not null
+    union select user_id from resp
+  )
+  select jsonb_build_object(
+    'por_origen', coalesce((
+      select jsonb_agg(jsonb_build_object('source', source, 'count', n) order by n desc, source)
+      from (select source, count(*) n from nuevos group by source) x), '[]'::jsonb),
+    'etapas', coalesce((
+      select jsonb_agg(jsonb_build_object(
+          'stage_id', s.id, 'stage_name', s.name, 'pipeline_id', s.pipeline_id,
+          'position', s.position,
+          'alcanzaron', (select count(*) from nuevos n
+                         where n.pipeline_id = s.pipeline_id
+                           and (n.status = 'won' or n.position >= s.position))
+        ) order by s.pipeline_id, s.position)
+      from public.crm_stages s
+      where s.organization_id = p_org and s.is_archived = false), '[]'::jsonb),
+    'ventas', jsonb_build_object(
+      'ganados', (select count(*) from ganados),
+      'monto_ars_cents', coalesce((select sum(value_cents) from ganados where currency = 'ARS'), 0),
+      'ganados_otra_moneda', (select count(*) from ganados where currency is distinct from 'ARS')),
+    'primera_respuesta_segundos', (select avg(secs) from resp),
+    'por_usuario', coalesce((
+      select jsonb_agg(jsonb_build_object(
+          'user_id', u.user_id,
+          'nuevos', (select count(*) from nuevos n where n.owner_user_id = u.user_id),
+          'ganados', (select count(*) from ganados g where g.owner_user_id = u.user_id),
+          'monto_ars_cents', coalesce((select sum(value_cents) from ganados g
+                                       where g.owner_user_id = u.user_id and g.currency = 'ARS'), 0),
+          'perdidos', (select count(*) from perdidos p where p.owner_user_id = u.user_id),
+          'primera_respuesta_segundos', (select avg(secs) from resp r where r.user_id = u.user_id)
+        ) order by u.user_id)
+      from usuarios u), '[]'::jsonb)
+  );
+$$;
+
+revoke execute on function public.fn_tablero_metrics(uuid, timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.fn_tablero_metrics(uuid, timestamptz, timestamptz, uuid) to authenticated, service_role;
+
 -- ---- travas do modo somente leitura do suporte: a enumeração vira função (migration 0274) ----
 --
 -- Só a DEFINIÇÃO mora aqui, antes da varredura de anon (função nova não entra
@@ -26993,6 +27106,275 @@ end $f$;
 -- Só quem aplica o schema (o dono das tabelas) a chama; não é `security definer`.
 -- EXECUTE sai das duas origens e dos papéis que o default ACL do Supabase alcança.
 revoke execute on function public.fn_aplicar_travas_de_suporte() from public, anon, authenticated, service_role;
+
+-- ---- listas inteligentes (migration 0294) ----
+-- ============================================================================
+-- 0294 — LISTAS INTELIGENTES: filtros guardados, membresía calculada al leer
+--
+-- Una lista inteligente guarda los FILTROS (etiqueta, etapa, origen, puntaje,
+-- último contacto, cumpleaños del mes), nunca la lista de contactos. La
+-- membresía se recalcula en cada lectura con `fn_smart_list_contacts`: un
+-- contacto que cambia de etapa entra o sale solo, y nadie mantiene una copia
+-- que envejece.
+--
+-- La función es SQL porque dos de los filtros no existen como columna de
+-- `contacts`: la etapa y el puntaje viven en `crm_leads` / `crm_lead_scores`, y
+-- el mes de cumpleaños sale de `birthday_md`. Hacerlo por PostgREST obligaría a
+-- traer ids y devolverlos en un `.in()` de cientos de elementos: una URL que
+-- revienta. Con la función el cliente pagina por keyset (`id > cursor`) y la URL
+-- no crece con la lista.
+--
+-- SECURITY INVOKER a propósito: corre con los permisos de quien llama, así la
+-- RLS de `contacts` sigue mandando. Todos los parámetros null = sin ese filtro.
+-- ============================================================================
+
+create table if not exists public.smart_lists (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  filters jsonb not null default '{}'::jsonb check (jsonb_typeof(filters) = 'object'),
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists smart_lists_org_name_uidx
+  on public.smart_lists (organization_id, lower(name));
+
+alter table public.smart_lists enable row level security;
+
+drop policy if exists smart_lists_select on public.smart_lists;
+drop policy if exists smart_lists_manager_write on public.smart_lists;
+
+create policy smart_lists_select on public.smart_lists
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+create policy smart_lists_manager_write on public.smart_lists
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+revoke all on public.smart_lists from anon;
+
+drop trigger if exists trg_smart_lists_set_updated_at on public.smart_lists;
+create trigger trg_smart_lists_set_updated_at
+  before update on public.smart_lists
+  for each row execute function public.fn_set_updated_at();
+
+create or replace function public.fn_smart_list_contacts(
+  p_org uuid,
+  p_tags text[] default null,
+  p_stage_ids uuid[] default null,
+  p_sources text[] default null,
+  p_score_min numeric default null,
+  p_score_max numeric default null,
+  p_inactive_before timestamptz default null,
+  p_birthday_month integer default null
+) returns setof public.contacts
+language sql stable security invoker
+set search_path = public
+as $$
+  select c.*
+  from public.contacts c
+  where c.organization_id = p_org
+    and c.is_anonymized = false
+    and c.is_merged_into is null
+    and (p_tags is null or c.tags && p_tags)
+    and (p_sources is null or c.source = any (p_sources))
+    -- "hace más de N días": quien nunca tuvo actividad también cuenta.
+    and (p_inactive_before is null
+         or c.last_activity_at is null
+         or c.last_activity_at < p_inactive_before)
+    and (p_birthday_month is null
+         or c.birthday_md between p_birthday_month * 100 + 1 and p_birthday_month * 100 + 31)
+    -- etapa y puntaje se evalúan sobre el MISMO negocio abierto del contacto.
+    and ((p_stage_ids is null and p_score_min is null and p_score_max is null)
+         or exists (
+           select 1
+           from public.crm_leads l
+           left join public.crm_lead_scores s on s.lead_id = l.id
+           where l.organization_id = p_org
+             and l.contact_id = c.id
+             and l.status = 'open'
+             and (p_stage_ids is null or l.stage_id = any (p_stage_ids))
+             and ((p_score_min is null and p_score_max is null)
+                  or (s.ai_probability is not null
+                      and (p_score_min is null or s.ai_probability >= p_score_min)
+                      and (p_score_max is null or s.ai_probability <= p_score_max)))
+         ));
+$$;
+
+revoke execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) from public, anon;
+grant execute on function public.fn_smart_list_contacts(uuid, text[], uuid[], text[], numeric, numeric, timestamptz, integer) to authenticated, service_role;
+
+-- Las travas del modo somente leitura del suporte cubren la tabla nueva (migración 0274).
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
+
+-- ---- campañas y tarifa de Meta (migration 0295) ----
+-- ============================================================================
+-- 0295 — CAMPAÑAS: mensaje aprobado enviado a una lista, solo por la API de Meta
+--
+-- `campaigns` guarda el borrador y el estado; `campaign_recipients` es UNA fila
+-- por (campaña, contacto), materializada al confirmar. El `unique` es lo que
+-- vuelve idempotente el reintento del cron: un contacto no puede tener dos
+-- filas, y una fila `enviado` no vuelve a enviarse.
+--
+-- Estados del destinatario: pendiente | enviado | excluido_optout |
+-- excluido_sin_telefono | error. El opt-out se REVALÚA justo antes de cada envío
+-- (el contacto pudo pedir la baja entre la confirmación y el envío), por eso un
+-- `pendiente` puede terminar en `excluido_optout`.
+--
+-- `claimed_at` es un arriendo corto: dos ticks del cron que se solapan no toman
+-- el mismo destinatario.
+--
+-- La tarifa de Meta NO se inventa: vive en `organizations.settings.campaigns.tarifa`
+-- y la escribe `fn_set_campaign_tarifa` (un solo UPDATE atómico sobre el jsonb,
+-- sin read-modify-write: el jsonb `settings` ya tiene escritores que se pisan).
+-- ============================================================================
+
+create table if not exists public.campaigns (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 120),
+  list_id uuid references public.smart_lists(id) on delete set null,
+  channel_session_id uuid references public.channel_sessions(id) on delete set null,
+  template_name text not null,
+  template_language text not null,
+  template_category text not null check (template_category in ('marketing', 'utility', 'authentication')),
+  template_values jsonb not null default '{}'::jsonb check (jsonb_typeof(template_values) = 'object'),
+  status text not null default 'borrador'
+    check (status in ('borrador', 'confirmada', 'enviando', 'completada', 'cancelada')),
+  status_reason text,
+  scheduled_at timestamptz,
+  confirmed_at timestamptz,
+  confirmed_by_user_id uuid references auth.users(id) on delete set null,
+  total_recipients integer not null default 0,
+  total_sent integer not null default 0,
+  total_excluded integer not null default 0,
+  total_error integer not null default 0,
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.campaigns add column if not exists status_reason text;
+
+create index if not exists campaigns_org_status_idx
+  on public.campaigns (organization_id, status);
+
+create table if not exists public.campaign_recipients (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  status text not null default 'pendiente'
+    check (status in ('pendiente', 'enviado', 'excluido_optout', 'excluido_sin_telefono', 'error')),
+  reason text,
+  external_id text,
+  attempts integer not null default 0,
+  claimed_at timestamptz,
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint campaign_recipients_campaign_contact_key unique (campaign_id, contact_id)
+);
+
+create index if not exists campaign_recipients_campaign_status_idx
+  on public.campaign_recipients (campaign_id, status);
+create index if not exists campaign_recipients_org_sent_idx
+  on public.campaign_recipients (organization_id, sent_at)
+  where status = 'enviado';
+
+alter table public.campaigns enable row level security;
+alter table public.campaign_recipients enable row level security;
+
+drop policy if exists campaigns_select on public.campaigns;
+drop policy if exists campaigns_manager_write on public.campaigns;
+drop policy if exists campaign_recipients_select on public.campaign_recipients;
+
+create policy campaigns_select on public.campaigns
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+-- Escritura de `authenticated` SOLO sobre borradores (using Y with check): confirmar,
+-- enviar, completar y cancelar son transiciones del servidor (cliente admin), así un
+-- manager no puede, vía PostgREST, reabrir una campaña ni saltarse el botón de baja
+-- que la confirmación verifica.
+create policy campaigns_manager_write on public.campaigns
+  using (
+    (public.fn_is_platform_admin()
+     or ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'manager')))
+    and status = 'borrador'
+  )
+  with check (
+    (public.fn_is_platform_admin()
+     or ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'manager')))
+    and status = 'borrador'
+  );
+
+-- Los destinatarios los escribe SOLO el servidor (service_role, que ignora RLS).
+create policy campaign_recipients_select on public.campaign_recipients
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+revoke all on public.campaigns from anon;
+revoke all on public.campaign_recipients from anon;
+revoke insert, update, delete on public.campaign_recipients from authenticated;
+
+drop trigger if exists trg_campaigns_set_updated_at on public.campaigns;
+create trigger trg_campaigns_set_updated_at
+  before update on public.campaigns
+  for each row execute function public.fn_set_updated_at();
+
+drop trigger if exists trg_campaign_recipients_set_updated_at on public.campaign_recipients;
+create trigger trg_campaign_recipients_set_updated_at
+  before update on public.campaign_recipients
+  for each row execute function public.fn_set_updated_at();
+
+-- Tarifa vigente de Meta. `p_tarifa` null = borrarla. Solo la ejecuta el servidor
+-- (service_role): la ruta PUT /api/v1/campaigns/tarifa exige admin con
+-- `requireRole` antes de llamarla. `authenticated` NO la ejecuta: una definer que
+-- escribe, con el org por argumento, sería escritura cross-tenant directa.
+create or replace function public.fn_set_campaign_tarifa(p_org uuid, p_tarifa jsonb)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{campaigns}',
+           (coalesce(settings -> 'campaigns', '{}'::jsonb) - 'tarifa')
+             || case when p_tarifa is null then '{}'::jsonb
+                     else jsonb_build_object('tarifa', p_tarifa) end,
+           true)
+   where id = p_org;
+end;
+$$;
+
+revoke execute on function public.fn_set_campaign_tarifa(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.fn_set_campaign_tarifa(uuid, jsonb) to service_role;
+
+-- Las travas del modo somente leitura del suporte cubren la tabla nueva (migración 0274).
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
 
 -- ---- media de mensaje: solo la escribe el servidor (migration 0291) ----
 -- C2/M1: el navegador no cambia `media_url` ni `media_storage_path`, ni crea un
@@ -27035,6 +27417,689 @@ drop trigger if exists trg_messages_media_solo_servidor on public.messages;
 create trigger trg_messages_media_solo_servidor
   before insert or update on public.messages
   for each row execute function public.fn_messages_media_solo_servidor();
+
+-- ---- reseñas después de ganar y «lo recomendó» (migration 0293) ----
+create table if not exists public.review_requests (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  due_at timestamptz not null,
+  sent_at timestamptz,
+  status text not null default 'pendiente'
+    check (status in ('pendiente', 'enviado', 'sin_configurar', 'omitido', 'fallido')),
+  error text,
+  created_at timestamptz not null default now(),
+  constraint review_requests_lead_id_key unique (lead_id)
+);
+
+create index if not exists review_requests_org_status_due_idx
+  on public.review_requests (organization_id, status, due_at);
+
+alter table public.review_requests enable row level security;
+
+drop policy if exists review_requests_select on public.review_requests;
+create policy review_requests_select on public.review_requests
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+revoke all on public.review_requests from anon;
+
+alter table public.contacts
+  add column if not exists referred_by_contact_id uuid
+  references public.contacts(id) on delete set null;
+
+create index if not exists contacts_referred_by_idx
+  on public.contacts (organization_id, referred_by_contact_id)
+  where referred_by_contact_id is not null;
+
+-- ---- la fusión de contactos hereda la baja (migration 0296) ----
+-- 0296_fusion_de_contactos_hereda_la_baja — seguridad § 2.3 (M18, agravado por las campañas).
+--
+-- Fusionar dos contactos NO heredaba la baja: un duplicado que pidió «BAJA» (is_blocked y
+-- consent.marketing.declined_at), fusionado en uno sin baja, dejaba al sobreviviente apto y
+-- recibía marketing masivo. Regla: la baja gana. Se hace con un trigger sobre la lápide
+-- (is_merged_into pasa de null a un id) para que valga en TODO camino de fusión, no solo
+-- en fn_mesclar_contatos.
+--  * is_blocked  = el del principal OR el del absorbido.
+--  * declined_at = la más reciente de las dos (si alguna existe).
+-- `consent` NO se hereda en lo demás: un granted_at ajeno fabricaría consentimiento.
+create or replace function public.fn_fusion_hereda_la_baja()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_baja text;
+begin
+  if old.is_merged_into is not null or new.is_merged_into is null then
+    return new;
+  end if;
+
+  v_baja := new.consent #>> '{marketing,declined_at}';
+
+  update public.contacts p
+     set is_blocked = p.is_blocked or new.is_blocked,
+         consent = case
+           when v_baja is null then p.consent
+           when (p.consent #>> '{marketing,declined_at}') is not null
+                and (p.consent #>> '{marketing,declined_at}')::timestamptz >= v_baja::timestamptz
+             then p.consent
+           else jsonb_set(
+                  coalesce(p.consent, '{}'::jsonb),
+                  '{marketing}',
+                  coalesce(p.consent -> 'marketing', '{}'::jsonb) || jsonb_build_object('declined_at', v_baja),
+                  true)
+         end
+   where p.id = new.is_merged_into
+     and p.organization_id = new.organization_id
+     and (
+       (new.is_blocked and not p.is_blocked)
+       or (v_baja is not null)
+     );
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_fusion_hereda_la_baja on public.contacts;
+create trigger trg_fusion_hereda_la_baja
+  after update of is_merged_into on public.contacts
+  for each row execute function public.fn_fusion_hereda_la_baja();
+
+revoke execute on function public.fn_fusion_hereda_la_baja() from public, anon, authenticated;
+
+-- ---- presupuestos desde un negócio (migration 0298) ----
+-- ============================================================================
+-- 0298 — PRESUPUESTOS desde un negocio (GC3)
+--
+-- Un presupuesto es lo que se le prometió a un cliente: qué, cuántas unidades,
+-- a qué precio, con qué descuento y hasta cuándo vale. Por eso cada línea es una
+-- FOTO del producto (`descripcion` y `precio_unit_cents` se copian al emitirlo):
+-- si el catálogo sube el precio la semana que viene, el presupuesto que ya salió
+-- no cambia. `producto_id` queda solo como referencia y se anula si el producto
+-- se borra.
+--
+-- El dinero va en `_cents` + `moneda` (la de la organización, ARS por defecto).
+-- `total_cents = subtotal_cents - descuento_cents` lo exige un CHECK: el PDF y la
+-- pantalla leen la misma cifra y no pueden discrepar.
+--
+-- NO es facturación fiscal. El recibo es un comprobante interno y el PDF lo dice
+-- («Comprobante no válido como factura»). El CRM tampoco cobra (decisión de
+-- cobros del 10/11): `recibo_*` solo registra que el cobro se hizo por fuera.
+--
+-- RLS: leer es de toda la organización; escribir es `agent` o más. Mismo molde
+-- que `catalog_products`, con el piso más bajo porque quien atiende arma el
+-- presupuesto.
+-- ============================================================================
+
+create table if not exists public.presupuestos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+
+  -- Correlativo por organización (1, 2, 3…): es lo que el cliente ve en el PDF.
+  numero integer not null,
+  estado text not null default 'emitido',
+
+  moneda text not null default 'ARS',
+  subtotal_cents bigint not null,
+  descuento_pct numeric(5,2) not null default 0,
+  descuento_cents bigint not null default 0,
+  total_cents bigint not null,
+
+  valido_hasta date not null,
+  notas text,
+
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+
+  accepted_at timestamptz,
+  accepted_by uuid references auth.users(id) on delete set null,
+
+  -- Cobro registrado a mano (efectivo, transferencia…). El CRM no mueve plata.
+  recibo_emitido_at timestamptz,
+  recibo_medio text,
+
+  constraint presupuestos_estado_valido check (estado in ('emitido', 'aceptado', 'rechazado')),
+  constraint presupuestos_moneda_iso check (moneda ~ '^[A-Z]{3}$'),
+  constraint presupuestos_montos_no_negativos
+    check (subtotal_cents >= 0 and descuento_cents >= 0 and total_cents >= 0),
+  constraint presupuestos_descuento_pct_rango check (descuento_pct >= 0 and descuento_pct <= 100),
+  constraint presupuestos_total_cierra check (total_cents = subtotal_cents - descuento_cents),
+  constraint presupuestos_recibo_solo_si_aceptado
+    check (recibo_emitido_at is null or estado = 'aceptado')
+);
+
+create unique index if not exists presupuestos_org_numero_key
+  on public.presupuestos (organization_id, numero);
+create index if not exists presupuestos_lead_idx
+  on public.presupuestos (lead_id, created_at desc);
+
+create table if not exists public.presupuesto_items (
+  id uuid primary key default gen_random_uuid(),
+  presupuesto_id uuid not null references public.presupuestos(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  producto_id uuid references public.catalog_products(id) on delete set null,
+  descripcion text not null,
+  cantidad integer not null,
+  precio_unit_cents bigint not null,
+  total_cents bigint not null,
+  position integer not null default 0,
+
+  constraint presupuesto_items_cantidad_positiva check (cantidad > 0),
+  constraint presupuesto_items_precio_no_negativo check (precio_unit_cents >= 0),
+  constraint presupuesto_items_total_cierra check (total_cents = cantidad * precio_unit_cents)
+);
+
+create index if not exists presupuesto_items_presupuesto_idx
+  on public.presupuesto_items (presupuesto_id, position);
+
+alter table public.presupuestos enable row level security;
+alter table public.presupuesto_items enable row level security;
+
+drop policy if exists presupuestos_select on public.presupuestos;
+create policy presupuestos_select on public.presupuestos
+  for select using (
+    (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin()
+  );
+
+drop policy if exists presupuestos_write on public.presupuestos;
+create policy presupuestos_write on public.presupuestos
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  );
+
+drop policy if exists presupuesto_items_select on public.presupuesto_items;
+create policy presupuesto_items_select on public.presupuesto_items
+  for select using (
+    (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin()
+  );
+
+drop policy if exists presupuesto_items_write on public.presupuesto_items;
+create policy presupuesto_items_write on public.presupuesto_items
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  );
+
+-- El default privilege del baseline le da todo a `anon`: se retira (el catálogo
+-- y los montos de un cliente no se leen con la anon key del navegador).
+revoke all on public.presupuestos from anon;
+revoke all on public.presupuesto_items from anon;
+grant select, insert, update, delete on public.presupuestos to authenticated;
+grant select, insert, update, delete on public.presupuesto_items to authenticated;
+grant all on public.presupuestos to service_role;
+grant all on public.presupuesto_items to service_role;
+
+-- ── Crear un presupuesto: cabecera + líneas en UNA transacción ─────────────
+--
+-- El número correlativo se toma bajo un lock por organización: dos agentes que
+-- emiten a la vez no pueden llevarse el mismo número ni dejar un hueco por un
+-- insert que falló a la mitad. `security invoker`: corre con la RLS de quien
+-- llama, así que un agente de otra organización no escribe en ésta.
+create or replace function public.fn_crear_presupuesto(
+  p_organization_id uuid,
+  p_lead_id uuid,
+  p_moneda text,
+  p_descuento_pct numeric,
+  p_valido_hasta date,
+  p_notas text,
+  p_items jsonb
+) returns public.presupuestos
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_numero integer;
+  v_subtotal bigint;
+  v_descuento bigint;
+  v_row public.presupuestos;
+begin
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text, 277));
+
+  if not exists (
+    select 1 from public.crm_leads
+     where id = p_lead_id and organization_id = p_organization_id
+  ) then
+    raise exception 'lead_no_encontrado' using errcode = 'P0002';
+  end if;
+
+  select coalesce(max(numero), 0) + 1 into v_numero
+    from public.presupuestos where organization_id = p_organization_id;
+
+  select coalesce(sum((i->>'cantidad')::int * (i->>'precio_unit_cents')::bigint), 0)
+    into v_subtotal
+    from jsonb_array_elements(p_items) i;
+
+  v_descuento := round(v_subtotal * round(p_descuento_pct * 100) / 10000.0);
+
+  insert into public.presupuestos (
+    organization_id, lead_id, numero, moneda, subtotal_cents, descuento_pct,
+    descuento_cents, total_cents, valido_hasta, notas, created_by
+  ) values (
+    p_organization_id, p_lead_id, v_numero, p_moneda, v_subtotal, p_descuento_pct,
+    v_descuento, v_subtotal - v_descuento, p_valido_hasta, p_notas, auth.uid()
+  ) returning * into v_row;
+
+  insert into public.presupuesto_items (
+    presupuesto_id, organization_id, producto_id, descripcion, cantidad,
+    precio_unit_cents, total_cents, position
+  )
+  select v_row.id, p_organization_id,
+         nullif(i.item->>'producto_id', '')::uuid,
+         i.item->>'descripcion',
+         (i.item->>'cantidad')::int,
+         (i.item->>'precio_unit_cents')::bigint,
+         (i.item->>'cantidad')::int * (i.item->>'precio_unit_cents')::bigint,
+         (i.ord - 1)::int
+    from jsonb_array_elements(p_items) with ordinality as i(item, ord);
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.fn_crear_presupuesto(uuid, uuid, text, numeric, date, text, jsonb) from public, anon;
+grant execute on function public.fn_crear_presupuesto(uuid, uuid, text, numeric, date, text, jsonb)
+  to authenticated, service_role;
+
+-- Las tres políticas restritivas del modo somente leitura del suporte (0274).
+select public.fn_aplicar_travas_de_suporte();
+-- ---- «Anonimizar» borra de verdad (migration 0301) ----
+--
+-- La ruta POST /api/v1/lgpd/anonymize hacía el paso 1 (contacto) con
+-- `fn_lgpd_anonymize_contact` y redactaba leads y actividades, pero NUNCA
+-- llamaba a esta cascada: mensajes, media, conversaciones, `event_log` y las
+-- tablas de IA quedaban legibles. Y la cascada no servía para llamarla después
+-- del paso 1, porque cortaba en «ya anonimizado» antes de tocar nada.
+--
+-- Qué cambia:
+--   1. Sin corte en «ya anonimizado». La rama del contacto, leads y actividades
+--      sigue corriendo UNA vez (la fecha `anonymized_at` responde al plazo
+--      legal y no se reescribe; leads y actividades de un contacto ya
+--      anonimizado son de `lib/lgpd/cascata.ts`). Todo lo demás corre siempre
+--      y es idempotente: cada UPDATE filtra lo que todavía tiene dato, así que
+--      la segunda pasada cuenta 0.
+--   2. Alcanza lo que faltaba: lo que el paso 1 deja en el contacto (consent,
+--      source_metadata, tags), `conversations.last_handoff_reason`,
+--      `messages.error_message`, `event_log` (payload y metadata, sin cortar el
+--      bus: los pendientes pasan a `dead`), `ai_agent_runs`, `ai_invocations`,
+--      `agent_cases` y `agent_case_events`.
+--   3. La fila densa de auditoría se escribe solo si hubo efecto.
+--
+-- Devuelve lo mismo que antes (`already_anonymized`, `counts`, `media_paths`):
+-- el worker de pedidos sigue leyendo `already_anonymized` igual.
+
+create or replace function public.fn_lgpd_cascade_redact_contact(
+  p_organization_id uuid, p_contact_id uuid, p_request_id uuid
+) returns jsonb
+language plpgsql security definer
+set search_path to 'public'
+as $$
+declare
+  v_already bool;
+  v_counts jsonb := '{}'::jsonb;
+  v_media_paths text[] := '{}';
+  v_anon_label text;
+  v_count int;
+  v_convs uuid[];
+  v_leads uuid[];
+  v_casos uuid[];
+  v_efeito int := 0;
+begin
+  perform public.fn_service_lock(p_organization_id, p_contact_id);
+  select is_anonymized into v_already
+    from contacts
+    where id = p_contact_id and organization_id = p_organization_id;
+
+  if not found then
+    raise exception 'contact not found' using errcode = 'P0002';
+  end if;
+  v_already := coalesce(v_already, false);
+
+  v_anon_label := 'Cliente Anonimizado #' || substring(p_contact_id::text from 1 for 8);
+
+  select coalesce(array_agg(id), '{}') into v_convs
+    from conversations
+    where contact_id = p_contact_id and organization_id = p_organization_id;
+
+  select coalesce(array_agg(id), '{}') into v_leads
+    from crm_leads
+    where organization_id = p_organization_id
+      and (
+        contact_id = p_contact_id
+        or id in (
+          select lead_id from crm_lead_links
+            where target_kind = 'contact'
+              and target_id = p_contact_id
+              and organization_id = p_organization_id
+        )
+      );
+
+  select coalesce(array_agg(id), '{}') into v_casos
+    from agent_cases
+    where organization_id = p_organization_id and conversation_id = any(v_convs);
+
+  -- Media que todavía tiene archivo (solo lo nuestro: media_storage_path).
+  select coalesce(array_agg(distinct media_storage_path)
+           filter (where media_storage_path is not null and length(media_storage_path) > 0), '{}')
+    into v_media_paths
+    from messages
+    where organization_id = p_organization_id and conversation_id = any(v_convs);
+
+  -- 1. contacts. Primera vez: todo. Ya anonimizado: solo lo que el paso 1 de
+  --    la ruta no limpia, sin tocar `anonymized_at` ni el nombre.
+  if not v_already then
+    update contacts set
+      name = v_anon_label,
+      display_name = v_anon_label,
+      email = null,
+      -- email_normalized es GENERATED (lower(trim(email))): se limpia sola.
+      phone_number = null,
+      cpf_encrypted = null,
+      cpf_hash = null,
+      birthdate = null,
+      is_anonymized = true,
+      anonymized_at = now(),
+      consent = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where id = p_contact_id and organization_id = p_organization_id;
+  else
+    update contacts set
+      email = null,
+      phone_number = null,
+      cpf_encrypted = null,
+      cpf_hash = null,
+      birthdate = null,
+      consent = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where id = p_contact_id and organization_id = p_organization_id
+      and (email is not null or phone_number is not null or cpf_encrypted is not null
+           or cpf_hash is not null or birthdate is not null
+           or consent <> '{}'::jsonb or source_metadata <> '{}'::jsonb or tags <> '{}'::text[]);
+  end if;
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('contacts', v_count);
+
+  -- 2. conversations
+  update conversations set
+    metadata = '{}'::jsonb,
+    last_message_preview = null,
+    last_handoff_reason = null,
+    updated_at = now()
+  where organization_id = p_organization_id and id = any(v_convs)
+    and (metadata <> '{}'::jsonb or last_message_preview is not null or last_handoff_reason is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('conversations', v_count);
+
+  -- 3. messages: cuerpo, media, error y metadata (quedan estado, horas y el hilo).
+  update messages set
+    body = '[mensagem anonimizada]',
+    media_url = null,
+    media_mime = null,
+    media_size_bytes = null,
+    media_storage_path = null,
+    error_message = null,
+    -- external_id trae el número de WhatsApp (`549...@c.us_<id>`). Sigue único por
+    -- org (messages_org_external_id_unique) y no se puede volver a casar con nada.
+    external_id = case when external_id is null then null else 'lgpd-redactado:' || id::text end,
+    metadata = '{}'::jsonb,
+    updated_at = now()
+  where organization_id = p_organization_id and conversation_id = any(v_convs)
+    and (body is distinct from '[mensagem anonimizada]' or media_url is not null
+         or media_mime is not null or media_size_bytes is not null
+         or media_storage_path is not null or error_message is not null
+         or (external_id is not null and external_id not like 'lgpd-redactado:%')
+         or metadata <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('messages', v_count);
+
+  -- 4 y 5. Actividades y leads. Primera vez: el rótulo. Ya anonimizado (la
+  --    ruta corre el paso 1 antes): todo lo demás de la lead y la actividad se
+  --    limpia acá, y el TÍTULO sigue la regla de `lib/lgpd/cascata.ts`
+  --    (TITULO_PRESERVADO = 20 y SUFIJO_ANONIMIZADO = ' (anonimizado)'), para
+  --    que la ruta y el cron de retención no dejen dos títulos distintos. Esto
+  --    alcanza también a las leads ligadas solo por `crm_lead_links`, que
+  --    `cascata.ts` no ve.
+  if v_already then
+    update crm_lead_activities set
+      payload = '{"redacted": true}'::jsonb,
+      metadata = '{}'::jsonb,
+      reason = null
+    where organization_id = p_organization_id
+      and (contact_id = p_contact_id or lead_id = any(v_leads))
+      and ((payload is distinct from '{"redacted": true}'::jsonb and payload <> '{}'::jsonb)
+           or metadata <> '{}'::jsonb or reason is not null);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('activities', v_count);
+
+    update crm_leads set
+      title = case
+        when coalesce(title, '') like '% (anonimizado)' or title = v_anon_label then title
+        else left(coalesce(title, ''), 20) || ' (anonimizado)'
+      end,
+      description = null,
+      custom_fields = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where organization_id = p_organization_id and id = any(v_leads)
+      and (not (coalesce(title, '') like '% (anonimizado)' or title = v_anon_label)
+           or description is not null or custom_fields <> '{}'::jsonb
+           or source_metadata <> '{}'::jsonb or tags <> '{}'::text[]);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('leads', v_count);
+  else
+    update crm_lead_activities set
+      payload = '{}'::jsonb,
+      metadata = '{}'::jsonb,
+      reason = null
+    where organization_id = p_organization_id
+      and (contact_id = p_contact_id or lead_id = any(v_leads));
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('activities', v_count);
+
+    update crm_leads set
+      title = v_anon_label,
+      description = null,
+      custom_fields = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where organization_id = p_organization_id and id = any(v_leads);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('leads', v_count);
+  end if;
+
+  -- 6. orders: se conservan valores, estado y fechas.
+  update orders set
+    payload = (coalesce(payload, '{}'::jsonb))
+      - 'customer'
+      - 'customer_name'
+      - 'customer_email'
+      - 'customer_phone'
+      - 'shipping_address'
+      - 'billing_address'
+      - 'contact_identification',
+    customer_external_id = null,
+    contact_id = null,
+    is_anonymized = true,
+    updated_at = now()
+  where organization_id = p_organization_id
+    and contact_id = p_contact_id;
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('orders', v_count);
+
+  -- 7. media a la cola de borrado (idempotente por unique (bucket, object_path)).
+  if array_length(v_media_paths, 1) > 0 then
+    insert into storage_redaction_queue (organization_id, request_id, bucket, object_path)
+    select p_organization_id, p_request_id, 'whatsapp-media', path
+      from unnest(v_media_paths) as path
+    on conflict (bucket, object_path) do nothing;
+  end if;
+
+  -- 7b. voice_calls: el teléfono de la otra punta (migration 0235).
+  update voice_calls set
+    peer_phone = v_anon_label,
+    owner_user_id = null,
+    created_by = null,
+    updated_at = now()
+  where organization_id = p_organization_id
+    and contact_id = p_contact_id
+    and (peer_phone is distinct from v_anon_label or owner_user_id is not null or created_by is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('voice_calls', v_count);
+
+  -- 8. event_log: el bus guarda en `payload` el cuerpo del mensaje, el nombre
+  --    y el teléfono. Queda solo lo que es un uuid (ids, que no reidentifican a
+  --    nadie solos) y la marca `redacted`. Lo que estaba pendiente pasa a
+  --    `dead`: un consumidor no tiene que actuar sobre una persona que pidió la
+  --    supresión. Entra también lo que esta transacción emitió en los pasos de
+  --    arriba (triggers de leads): por eso la segunda pasada cuenta 0. Los
+  --    eventos `lgpd.*` y `contact.anonymized` son el registro del derecho
+  --    ejercido y no se tocan.
+  update event_log e set
+    payload = coalesce((
+        select jsonb_object_agg(j.k, j.v)
+          from jsonb_each(case when jsonb_typeof(e.payload) = 'object' then e.payload else '{}'::jsonb end) as j(k, v)
+          where jsonb_typeof(j.v) = 'string'
+            and (j.v #>> '{}') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      ), '{}'::jsonb) || '{"redacted": true}'::jsonb,
+    metadata = '{"lgpd_redacted": true}'::jsonb,
+    status = case when e.status = 'pending' then 'dead' else e.status end,
+    last_error = case when e.status = 'pending' then 'lgpd_redacted' else e.last_error end,
+    updated_at = now()
+  where e.organization_id = p_organization_id
+    and e.event_type <> 'contact.anonymized'
+    and e.event_type not like 'lgpd.%'
+    and (e.payload->>'redacted') is distinct from 'true'
+    and (
+      (e.entity_kind = 'contact' and e.entity_id = p_contact_id)
+      or (e.entity_kind = 'conversation' and e.entity_id = any(v_convs))
+      or (e.entity_kind = 'crm_lead' and e.entity_id = any(v_leads))
+      or (e.entity_kind = 'message' and e.entity_id in (
+            select m.id from messages m
+              where m.organization_id = p_organization_id and m.conversation_id = any(v_convs)))
+      or (e.payload ? 'contact_id' and e.payload->>'contact_id' = p_contact_id::text)
+    );
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('event_log', v_count);
+
+  -- 9. IA. Las corridas guardan los argumentos de las herramientas (lo que el
+  --    agente leyó o escribió de la persona) y el error crudo; las
+  --    invocaciones, citas y el error del proveedor. Quedan tokens, costo y
+  --    latencia, que sostienen el presupuesto. `ai_reply_drafts` ya la limpia
+  --    `fn_reply_redact` al anonimizar.
+  update ai_agent_runs set
+    tool_calls = '[]'::jsonb,
+    error_message = null
+  where organization_id = p_organization_id
+    and (contact_id = p_contact_id or conversation_id = any(v_convs))
+    and (tool_calls <> '[]'::jsonb or error_message is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('ai_agent_runs', v_count);
+
+  update ai_invocations set
+    citations = '[]'::jsonb,
+    error_payload = null
+  where organization_id = p_organization_id
+    and conversation_id = any(v_convs)
+    and (citations <> '[]'::jsonb or error_payload is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('ai_invocations', v_count);
+
+  -- Casos que el agente escaló: título, resumen y bloqueo los escribe el LLM
+  -- sobre la conversación. Son NOT NULL, por eso van con el rótulo.
+  update agent_cases set
+    title = '[caso anonimizado]',
+    summary = '[caso anonimizado]',
+    blocker = '[caso anonimizado]',
+    context_snapshot = '{}'::jsonb,
+    updated_at = now()
+  where organization_id = p_organization_id and id = any(v_casos)
+    and (title is distinct from '[caso anonimizado]' or summary is distinct from '[caso anonimizado]'
+         or blocker is distinct from '[caso anonimizado]' or context_snapshot <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('agent_cases', v_count);
+
+  update agent_case_events set
+    body = null,
+    metadata = '{}'::jsonb
+  where organization_id = p_organization_id and case_id = any(v_casos)
+    and (body is not null or metadata <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('agent_case_events', v_count);
+
+  -- 10. Fila densa de auditoría, solo si hubo efecto.
+  if v_efeito > 0 or coalesce(array_length(v_media_paths, 1), 0) > 0 then
+    insert into api_audit_log (organization_id, action, actor_user_id, resource_type, resource_id, metadata, bypassed_rls)
+    values (
+      p_organization_id,
+      'lgpd.redact_executed',
+      null,
+      'contact',
+      p_contact_id,
+      jsonb_build_object(
+        'cascaded_to', v_counts,
+        'media_queued', coalesce(array_length(v_media_paths, 1), 0),
+        'request_id', p_request_id,
+        'already_anonymized', v_already
+      ),
+      true
+    );
+  end if;
+
+  return jsonb_build_object(
+    'already_anonymized', v_already,
+    'counts', v_counts,
+    'media_paths', v_media_paths
+  );
+end;
+$$;
+revoke all on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) to service_role;
+
+-- Sin este índice, `payload->>'contact_id'` recorre todo el event_log de la org
+-- con el candado del contacto tomado. Lo que entra por entidad ya usa
+-- `event_log_entity_idx`.
+create index if not exists event_log_payload_contact_idx
+  on public.event_log (organization_id, (payload->>'contact_id'))
+  where payload ? 'contact_id';
+
+notify pgrst, 'reload schema';
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -27244,6 +28309,55 @@ alter table public.organizations
 alter table public.organizations
   alter column timezone set default 'America/Argentina/Buenos_Aires';
 
+-- ---- formularios y encuestas publicos: capture_forms (migration 0292) ----
+create table if not exists public.capture_forms (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  slug text not null unique check (slug ~ '^[a-z0-9]{8,32}$'),
+  kind text not null default 'formulario' check (kind in ('formulario', 'encuesta')),
+  name text not null check (length(name) between 1 and 120),
+  fields jsonb not null default '[]'::jsonb,
+  pipeline_id uuid not null references public.crm_pipelines(id) on delete cascade,
+  stage_id uuid not null references public.crm_stages(id) on delete cascade,
+  tags text[] not null default '{}'::text[],
+  thanks_message text not null default '',
+  consent_text text not null default '',
+  webhook_source_id uuid references public.webhook_sources(id) on delete set null,
+  is_active boolean not null default true,
+  created_by_user_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists capture_forms_org_idx
+  on public.capture_forms (organization_id, created_at desc);
+
+comment on table public.capture_forms is
+  'Formularios y encuestas públicos del CRM Conectado. El envío entra por webhook_sources/webhook_lead_captures (webhook_source_id); acá solo vive la definición.';
+
+alter table public.capture_forms enable row level security;
+
+drop policy if exists "capture_forms_select" on public.capture_forms;
+create policy "capture_forms_select" on public.capture_forms
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or public.fn_is_platform_admin()
+  );
+
+drop policy if exists "capture_forms_manager_write" on public.capture_forms;
+create policy "capture_forms_manager_write" on public.capture_forms
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+notify pgrst, 'reload schema';
 -- ---- user_recovery_codes só com service role (migration 0277) ----
 -- Auditoria 2026-11-13, H1: com GRANT ALL a authenticated, uma sessão aal1 inseria
 -- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.

@@ -49,6 +49,7 @@ const SCOPES: { id: string; label: string }[] = [
   // O papel viaja junto dos escopos (ver lib/mcp/auth.ts) e também não
   // aparecia em lugar nenhum da interface.
   { id: "role:manager", label: "Tratar o token como gerente (necessário p/ criar e atribuir)" },
+  { id: "prospectos:write", label: "Entrada de prospectos por API (n8n), sin acceso al MCP" },
   { id: "contacts:read", label: "Ler contatos" },
   { id: "contacts:write", label: "Criar e editar contatos" },
   { id: "leads:read", label: "Ler leads" },
