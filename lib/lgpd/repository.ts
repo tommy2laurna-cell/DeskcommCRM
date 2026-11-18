@@ -6,7 +6,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeDueAt } from "./sla";
+import { computeDueAt, vencimientoLegalAR } from "./sla";
 import type { LgpdRequest, LgpdRequestType, LgpdScope } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -16,12 +16,19 @@ import type { LgpdRequest, LgpdRequestType, LgpdScope } from "./types";
 export interface CreateLgpdRequestInput {
   organizationId: string;
   requestType: LgpdRequestType;
-  source: "nuvemshop" | "admin_panel" | "api";
+  /** Los cuatro que acepta `lgpd_requests_source_check`. */
+  source: LgpdRequest["source"];
   contactId?: string | null;
   externalCustomerId?: string | null;
   receivedAt: Date;
-  /** Number of BR business days for SLA (e.g. 15 for redact, 7 for data export). */
-  slaDays: number;
+  /**
+   * Solo para `store_redact` (desinstalación de la tienda, plazo de la
+   * plataforma y no del titular): días hábiles de Brasil, 15 por defecto.
+   * `data_request` y `redact` vencen por la Ley 25.326 (`vencimientoLegalAR`).
+   */
+  slaDays?: number;
+  /** Estado inicial. `processing` cuando quien lo crea lo ejecuta en el acto. */
+  status?: "received" | "processing";
   /** Extra context to store in request_payload. */
   payload?: Record<string, unknown>;
   /** Whether this is a high-priority emergency request (drives early SLA alarms). Default false. */
@@ -35,7 +42,10 @@ export async function createLgpdRequest(
 ): Promise<{ id: string; due_at: string }> {
   const admin = createAdminClient();
 
-  const dueAt = computeDueAt(input.receivedAt, input.slaDays);
+  const dueAt =
+    input.requestType === "store_redact"
+      ? computeDueAt(input.receivedAt, input.slaDays ?? 15)
+      : vencimientoLegalAR(input.requestType, input.receivedAt);
 
   const { data, error } = await admin
     .from("lgpd_requests")
@@ -47,7 +57,7 @@ export async function createLgpdRequest(
       external_customer_id: input.externalCustomerId ?? null,
       received_at: input.receivedAt.toISOString(),
       due_at: dueAt.toISOString(),
-      status: "received",
+      status: input.status ?? "received",
       request_payload: input.payload ?? {},
       emergency: input.emergency ?? false,
       scope: input.scope ?? "contact",

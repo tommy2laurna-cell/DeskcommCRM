@@ -224,7 +224,9 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
             completed_at: new Date().toISOString(),
             result: { already_anonymized: true, contact_id: contactId },
             error_message: null,
-            cascaded_to: {},
+            // Desde la 0301 la cascada limpia el resto aunque el contacto ya
+            // estuviera anonimizado: se registra lo que hizo.
+            cascaded_to: cascade.counts,
           })
           .eq("organization_id", orgId)
           .eq("id", requestId);

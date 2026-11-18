@@ -9392,6 +9392,13 @@ export const DICIONARIO: Traducoes = {
   "Chat da web": { es: "Chat de la web" },
   "Formulário ou QR": { es: "Formulario o QR" },
   "WhatsApp": { es: "WhatsApp" },
+  // Ley 25.326 (auditoría 2026-11-14, H7 y H8): anonimizar y pedidos del titular.
+  "Não foi possível registrar a solicitação de supressão.": { es: "No se pudo registrar el pedido de supresión." },
+  "A anonimização ficou incompleta. Tente novamente.": { es: "La anonimización quedó incompleta. Probá de nuevo." },
+  "Corpo da requisição inválido.": { es: "El cuerpo del pedido no es válido." },
+  "A data do pedido não pode estar no futuro.": { es: "La fecha del pedido no puede estar en el futuro." },
+  "Não foi possível registrar a solicitação.": { es: "No se pudo registrar el pedido." },
+  "Este contato já foi anonimizado.": { es: "Este contacto ya fue anonimizado." },
 };
 
 /**
