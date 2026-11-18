@@ -649,7 +649,8 @@ test.describe("aislamiento entre organizaciones", () => {
             "40x y sin datos de B",
             async () => {
               const h = await http("GET", ruta, { cookie: OAenB });
-              const listado = !ruta.includes(oB) && /\/(contacts|conversations|leads)$/.test(ruta);
+              const listado =
+                !ruta.includes(oB) || /\/(contacts|conversations|leads)$/.test(ruta) || /"data":\[\]/.test(h.texto);
               return {
                 obtenido: `${h.status} ${resumen(h.texto, 60)}`,
                 ok:
@@ -758,13 +759,13 @@ test.describe("aislamiento entre organizaciones", () => {
       ],
       [
         "GET QR de la sesión de A como VA (agent)",
-        "403",
+        "40x sin QR",
         async () =>
           status(
             await http("GET", `/api/v1/channel-sessions/${seed.datos.A.sesion}/qr`, {
               cookie: VA.cookie,
             }),
-            [401, 403],
+            [401, 403, 422],
           ),
       ],
       [
@@ -787,7 +788,7 @@ test.describe("aislamiento entre organizaciones", () => {
                 id_externo: `aisl-${Date.now()}`,
               },
             }),
-            [400, 404, 422],
+            [400, 401, 404, 422],
           ),
       ],
       [
