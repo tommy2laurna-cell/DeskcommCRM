@@ -32,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: aislamiento-${{ github.ref }}
+  group: aislamiento-${{ github.ref }}-${{ inputs.ref || 'propio' }}
   cancel-in-progress: true
 
 jobs:
