@@ -5776,8 +5776,10 @@ drop policy if exists "webhook_sources_manager_write" on public.webhook_sources;
 
 create policy "webhook_sources_select" on public.webhook_sources
   for select using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin()
+    -- migration 0300: solo manager lee (path_token); antes cualquier miembro
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
   );
 
 create policy "webhook_sources_manager_write" on public.webhook_sources
@@ -18289,7 +18291,8 @@ returns setof uuid language sql stable security definer set search_path = public
 $f$;
 create or replace function public.fn_user_role_in_org(p_org uuid)
 returns text language sql stable security definer set search_path = public as $f$
- select case when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
+ select case when not exists (select 1 from public.organizations o where o.id=p_org and o.status='active') then null
+ when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
  then case when s->>'access_mode'='full' then 'admin' else 'viewer' end
  else (select role from public.user_organizations where user_id=auth.uid() and organization_id=p_org and revoked_at is null limit 1) end
  from (select public.fn_support_context() s) c;
@@ -27717,8 +27720,508 @@ grant execute on function public.fn_crear_presupuesto(uuid, uuid, text, numeric,
 
 -- Las tres políticas restritivas del modo somente leitura del suporte (0274).
 select public.fn_aplicar_travas_de_suporte();
+-- ---- «Anonimizar» borra de verdad (migration 0301) ----
+--
+-- La ruta POST /api/v1/lgpd/anonymize hacía el paso 1 (contacto) con
+-- `fn_lgpd_anonymize_contact` y redactaba leads y actividades, pero NUNCA
+-- llamaba a esta cascada: mensajes, media, conversaciones, `event_log` y las
+-- tablas de IA quedaban legibles. Y la cascada no servía para llamarla después
+-- del paso 1, porque cortaba en «ya anonimizado» antes de tocar nada.
+--
+-- Qué cambia:
+--   1. Sin corte en «ya anonimizado». La rama del contacto, leads y actividades
+--      sigue corriendo UNA vez (la fecha `anonymized_at` responde al plazo
+--      legal y no se reescribe; leads y actividades de un contacto ya
+--      anonimizado son de `lib/lgpd/cascata.ts`). Todo lo demás corre siempre
+--      y es idempotente: cada UPDATE filtra lo que todavía tiene dato, así que
+--      la segunda pasada cuenta 0.
+--   2. Alcanza lo que faltaba: lo que el paso 1 deja en el contacto (consent,
+--      source_metadata, tags), `conversations.last_handoff_reason`,
+--      `messages.error_message`, `event_log` (payload y metadata, sin cortar el
+--      bus: los pendientes pasan a `dead`), `ai_agent_runs`, `ai_invocations`,
+--      `agent_cases` y `agent_case_events`.
+--   3. La fila densa de auditoría se escribe solo si hubo efecto.
+--
+-- Devuelve lo mismo que antes (`already_anonymized`, `counts`, `media_paths`):
+-- el worker de pedidos sigue leyendo `already_anonymized` igual.
+
+create or replace function public.fn_lgpd_cascade_redact_contact(
+  p_organization_id uuid, p_contact_id uuid, p_request_id uuid
+) returns jsonb
+language plpgsql security definer
+set search_path to 'public'
+as $$
+declare
+  v_already bool;
+  v_counts jsonb := '{}'::jsonb;
+  v_media_paths text[] := '{}';
+  v_anon_label text;
+  v_count int;
+  v_convs uuid[];
+  v_leads uuid[];
+  v_casos uuid[];
+  v_efeito int := 0;
+begin
+  perform public.fn_service_lock(p_organization_id, p_contact_id);
+  select is_anonymized into v_already
+    from contacts
+    where id = p_contact_id and organization_id = p_organization_id;
+
+  if not found then
+    raise exception 'contact not found' using errcode = 'P0002';
+  end if;
+  v_already := coalesce(v_already, false);
+
+  v_anon_label := 'Cliente Anonimizado #' || substring(p_contact_id::text from 1 for 8);
+
+  select coalesce(array_agg(id), '{}') into v_convs
+    from conversations
+    where contact_id = p_contact_id and organization_id = p_organization_id;
+
+  select coalesce(array_agg(id), '{}') into v_leads
+    from crm_leads
+    where organization_id = p_organization_id
+      and (
+        contact_id = p_contact_id
+        or id in (
+          select lead_id from crm_lead_links
+            where target_kind = 'contact'
+              and target_id = p_contact_id
+              and organization_id = p_organization_id
+        )
+      );
+
+  select coalesce(array_agg(id), '{}') into v_casos
+    from agent_cases
+    where organization_id = p_organization_id and conversation_id = any(v_convs);
+
+  -- Media que todavía tiene archivo (solo lo nuestro: media_storage_path).
+  select coalesce(array_agg(distinct media_storage_path)
+           filter (where media_storage_path is not null and length(media_storage_path) > 0), '{}')
+    into v_media_paths
+    from messages
+    where organization_id = p_organization_id and conversation_id = any(v_convs);
+
+  -- 1. contacts. Primera vez: todo. Ya anonimizado: solo lo que el paso 1 de
+  --    la ruta no limpia, sin tocar `anonymized_at` ni el nombre.
+  if not v_already then
+    update contacts set
+      name = v_anon_label,
+      display_name = v_anon_label,
+      email = null,
+      -- email_normalized es GENERATED (lower(trim(email))): se limpia sola.
+      phone_number = null,
+      cpf_encrypted = null,
+      cpf_hash = null,
+      birthdate = null,
+      is_anonymized = true,
+      anonymized_at = now(),
+      consent = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where id = p_contact_id and organization_id = p_organization_id;
+  else
+    update contacts set
+      email = null,
+      phone_number = null,
+      cpf_encrypted = null,
+      cpf_hash = null,
+      birthdate = null,
+      consent = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where id = p_contact_id and organization_id = p_organization_id
+      and (email is not null or phone_number is not null or cpf_encrypted is not null
+           or cpf_hash is not null or birthdate is not null
+           or consent <> '{}'::jsonb or source_metadata <> '{}'::jsonb or tags <> '{}'::text[]);
+  end if;
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('contacts', v_count);
+
+  -- 2. conversations
+  update conversations set
+    metadata = '{}'::jsonb,
+    last_message_preview = null,
+    last_handoff_reason = null,
+    updated_at = now()
+  where organization_id = p_organization_id and id = any(v_convs)
+    and (metadata <> '{}'::jsonb or last_message_preview is not null or last_handoff_reason is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('conversations', v_count);
+
+  -- 3. messages: cuerpo, media, error y metadata (quedan estado, horas y el hilo).
+  update messages set
+    body = '[mensagem anonimizada]',
+    media_url = null,
+    media_mime = null,
+    media_size_bytes = null,
+    media_storage_path = null,
+    error_message = null,
+    -- external_id trae el número de WhatsApp (`549...@c.us_<id>`). Sigue único por
+    -- org (messages_org_external_id_unique) y no se puede volver a casar con nada.
+    external_id = case when external_id is null then null else 'lgpd-redactado:' || id::text end,
+    metadata = '{}'::jsonb,
+    updated_at = now()
+  where organization_id = p_organization_id and conversation_id = any(v_convs)
+    and (body is distinct from '[mensagem anonimizada]' or media_url is not null
+         or media_mime is not null or media_size_bytes is not null
+         or media_storage_path is not null or error_message is not null
+         or (external_id is not null and external_id not like 'lgpd-redactado:%')
+         or metadata <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('messages', v_count);
+
+  -- 4 y 5. Actividades y leads. Primera vez: el rótulo. Ya anonimizado (la
+  --    ruta corre el paso 1 antes): todo lo demás de la lead y la actividad se
+  --    limpia acá, y el TÍTULO sigue la regla de `lib/lgpd/cascata.ts`
+  --    (TITULO_PRESERVADO = 20 y SUFIJO_ANONIMIZADO = ' (anonimizado)'), para
+  --    que la ruta y el cron de retención no dejen dos títulos distintos. Esto
+  --    alcanza también a las leads ligadas solo por `crm_lead_links`, que
+  --    `cascata.ts` no ve.
+  if v_already then
+    update crm_lead_activities set
+      payload = '{"redacted": true}'::jsonb,
+      metadata = '{}'::jsonb,
+      reason = null
+    where organization_id = p_organization_id
+      and (contact_id = p_contact_id or lead_id = any(v_leads))
+      and ((payload is distinct from '{"redacted": true}'::jsonb and payload <> '{}'::jsonb)
+           or metadata <> '{}'::jsonb or reason is not null);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('activities', v_count);
+
+    update crm_leads set
+      title = case
+        when coalesce(title, '') like '% (anonimizado)' or title = v_anon_label then title
+        else left(coalesce(title, ''), 20) || ' (anonimizado)'
+      end,
+      description = null,
+      custom_fields = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where organization_id = p_organization_id and id = any(v_leads)
+      and (not (coalesce(title, '') like '% (anonimizado)' or title = v_anon_label)
+           or description is not null or custom_fields <> '{}'::jsonb
+           or source_metadata <> '{}'::jsonb or tags <> '{}'::text[]);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('leads', v_count);
+  else
+    update crm_lead_activities set
+      payload = '{}'::jsonb,
+      metadata = '{}'::jsonb,
+      reason = null
+    where organization_id = p_organization_id
+      and (contact_id = p_contact_id or lead_id = any(v_leads));
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('activities', v_count);
+
+    update crm_leads set
+      title = v_anon_label,
+      description = null,
+      custom_fields = '{}'::jsonb,
+      source_metadata = '{}'::jsonb,
+      tags = '{}'::text[],
+      updated_at = now()
+    where organization_id = p_organization_id and id = any(v_leads);
+    get diagnostics v_count = row_count;
+    v_efeito := v_efeito + v_count;
+    v_counts := v_counts || jsonb_build_object('leads', v_count);
+  end if;
+
+  -- 6. orders: se conservan valores, estado y fechas.
+  update orders set
+    payload = (coalesce(payload, '{}'::jsonb))
+      - 'customer'
+      - 'customer_name'
+      - 'customer_email'
+      - 'customer_phone'
+      - 'shipping_address'
+      - 'billing_address'
+      - 'contact_identification',
+    customer_external_id = null,
+    contact_id = null,
+    is_anonymized = true,
+    updated_at = now()
+  where organization_id = p_organization_id
+    and contact_id = p_contact_id;
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('orders', v_count);
+
+  -- 7. media a la cola de borrado (idempotente por unique (bucket, object_path)).
+  if array_length(v_media_paths, 1) > 0 then
+    insert into storage_redaction_queue (organization_id, request_id, bucket, object_path)
+    select p_organization_id, p_request_id, 'whatsapp-media', path
+      from unnest(v_media_paths) as path
+    on conflict (bucket, object_path) do nothing;
+  end if;
+
+  -- 7b. voice_calls: el teléfono de la otra punta (migration 0235).
+  update voice_calls set
+    peer_phone = v_anon_label,
+    owner_user_id = null,
+    created_by = null,
+    updated_at = now()
+  where organization_id = p_organization_id
+    and contact_id = p_contact_id
+    and (peer_phone is distinct from v_anon_label or owner_user_id is not null or created_by is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('voice_calls', v_count);
+
+  -- 8. event_log: el bus guarda en `payload` el cuerpo del mensaje, el nombre
+  --    y el teléfono. Queda solo lo que es un uuid (ids, que no reidentifican a
+  --    nadie solos) y la marca `redacted`. Lo que estaba pendiente pasa a
+  --    `dead`: un consumidor no tiene que actuar sobre una persona que pidió la
+  --    supresión. Entra también lo que esta transacción emitió en los pasos de
+  --    arriba (triggers de leads): por eso la segunda pasada cuenta 0. Los
+  --    eventos `lgpd.*` y `contact.anonymized` son el registro del derecho
+  --    ejercido y no se tocan.
+  update event_log e set
+    payload = coalesce((
+        select jsonb_object_agg(j.k, j.v)
+          from jsonb_each(case when jsonb_typeof(e.payload) = 'object' then e.payload else '{}'::jsonb end) as j(k, v)
+          where jsonb_typeof(j.v) = 'string'
+            and (j.v #>> '{}') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      ), '{}'::jsonb) || '{"redacted": true}'::jsonb,
+    metadata = '{"lgpd_redacted": true}'::jsonb,
+    status = case when e.status = 'pending' then 'dead' else e.status end,
+    last_error = case when e.status = 'pending' then 'lgpd_redacted' else e.last_error end,
+    updated_at = now()
+  where e.organization_id = p_organization_id
+    and e.event_type <> 'contact.anonymized'
+    and e.event_type not like 'lgpd.%'
+    and (e.payload->>'redacted') is distinct from 'true'
+    and (
+      (e.entity_kind = 'contact' and e.entity_id = p_contact_id)
+      or (e.entity_kind = 'conversation' and e.entity_id = any(v_convs))
+      or (e.entity_kind = 'crm_lead' and e.entity_id = any(v_leads))
+      or (e.entity_kind = 'message' and e.entity_id in (
+            select m.id from messages m
+              where m.organization_id = p_organization_id and m.conversation_id = any(v_convs)))
+      or (e.payload ? 'contact_id' and e.payload->>'contact_id' = p_contact_id::text)
+    );
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('event_log', v_count);
+
+  -- 9. IA. Las corridas guardan los argumentos de las herramientas (lo que el
+  --    agente leyó o escribió de la persona) y el error crudo; las
+  --    invocaciones, citas y el error del proveedor. Quedan tokens, costo y
+  --    latencia, que sostienen el presupuesto. `ai_reply_drafts` ya la limpia
+  --    `fn_reply_redact` al anonimizar.
+  update ai_agent_runs set
+    tool_calls = '[]'::jsonb,
+    error_message = null
+  where organization_id = p_organization_id
+    and (contact_id = p_contact_id or conversation_id = any(v_convs))
+    and (tool_calls <> '[]'::jsonb or error_message is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('ai_agent_runs', v_count);
+
+  update ai_invocations set
+    citations = '[]'::jsonb,
+    error_payload = null
+  where organization_id = p_organization_id
+    and conversation_id = any(v_convs)
+    and (citations <> '[]'::jsonb or error_payload is not null);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('ai_invocations', v_count);
+
+  -- Casos que el agente escaló: título, resumen y bloqueo los escribe el LLM
+  -- sobre la conversación. Son NOT NULL, por eso van con el rótulo.
+  update agent_cases set
+    title = '[caso anonimizado]',
+    summary = '[caso anonimizado]',
+    blocker = '[caso anonimizado]',
+    context_snapshot = '{}'::jsonb,
+    updated_at = now()
+  where organization_id = p_organization_id and id = any(v_casos)
+    and (title is distinct from '[caso anonimizado]' or summary is distinct from '[caso anonimizado]'
+         or blocker is distinct from '[caso anonimizado]' or context_snapshot <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('agent_cases', v_count);
+
+  update agent_case_events set
+    body = null,
+    metadata = '{}'::jsonb
+  where organization_id = p_organization_id and case_id = any(v_casos)
+    and (body is not null or metadata <> '{}'::jsonb);
+  get diagnostics v_count = row_count;
+  v_efeito := v_efeito + v_count;
+  v_counts := v_counts || jsonb_build_object('agent_case_events', v_count);
+
+  -- 10. Fila densa de auditoría, solo si hubo efecto.
+  if v_efeito > 0 or coalesce(array_length(v_media_paths, 1), 0) > 0 then
+    insert into api_audit_log (organization_id, action, actor_user_id, resource_type, resource_id, metadata, bypassed_rls)
+    values (
+      p_organization_id,
+      'lgpd.redact_executed',
+      null,
+      'contact',
+      p_contact_id,
+      jsonb_build_object(
+        'cascaded_to', v_counts,
+        'media_queued', coalesce(array_length(v_media_paths, 1), 0),
+        'request_id', p_request_id,
+        'already_anonymized', v_already
+      ),
+      true
+    );
+  end if;
+
+  return jsonb_build_object(
+    'already_anonymized', v_already,
+    'counts', v_counts,
+    'media_paths', v_media_paths
+  );
+end;
+$$;
+revoke all on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) to service_role;
+
+-- Sin este índice, `payload->>'contact_id'` recorre todo el event_log de la org
+-- con el candado del contacto tomado. Lo que entra por entidad ya usa
+-- `event_log_entity_idx`.
+create index if not exists event_log_payload_contact_idx
+  on public.event_log (organization_id, (payload->>'contact_id'))
+  where payload ? 'contact_id';
 
 notify pgrst, 'reload schema';
+
+-- ---- las recetas pueden enviar (migration 0302) ----
+-- 0302 — Las recetas pueden enviar (PR #23).
+--
+-- `fn_service_event_origin` solo resolvía 6 tipos de evento; los 4 del reloj de
+-- recetas (`appointment.reminder`, `contact.silent`, `lead.idle`,
+-- `contact.dormant`) caían en `service_event_origin_unsupported` (40001) y
+-- `serviceForEvent` lo tomaba como «fronteira vencida»: ninguna receta enviaba.
+-- Se suman los 4 con el mismo control de alcance (contacto de la entidad, no
+-- anonimizado ni fusionado). La fronteira sigue viniendo del `service_origin`
+-- de tipo command que estampa `app/api/v1/cron/recetas`; sin él, `service_stale`.
+-- Cuerpo idéntico a 0224 salvo el bloque marcado «0302». Mismo bloque en el
+-- apéndice del baseline.
+
+create or replace function public.fn_service_event_origin(p_org uuid,p_event uuid,p_contact uuid,p_session uuid default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare e public.event_log; origin jsonb; boundary jsonb; current_boundary jsonb; entity_contact uuid; cid uuid; sid uuid; observed jsonb; root_event uuid:=p_event; visited uuid[]:=array[]::uuid[];
+begin
+ -- O drain faz claim otimista em outra transação; não conserva row lock.
+ -- Não travar event_log: advisory contato antecede os locks de conversa/FKs.
+ perform public.fn_service_lock(p_org,p_contact);
+ loop
+ if root_event = any(visited) or cardinality(visited)>=32 then raise exception 'service_origin_cycle' using errcode='40001'; end if;
+ visited:=array_append(visited,root_event);
+ boundary:=null;
+ entity_contact:=null;
+ select * into e from public.event_log where organization_id=p_org and id=root_event;
+ if not found then raise exception 'service_event_not_found' using errcode='P0002'; end if;
+ if e.event_type in ('lead.created','lead.stage_changed','lead.tag_added') and e.entity_kind='crm_lead' then
+   select contact_id into entity_contact from public.crm_leads where organization_id=p_org and id=e.entity_id;
+ elsif e.event_type='contact.tag_added' and e.entity_kind='contact' then
+   select id into entity_contact from public.contacts where organization_id=p_org and id=e.entity_id;
+ elsif e.event_type='appointment.outcome_confirmed' and e.entity_kind='appointment' then
+   select contact_id into entity_contact from public.calendar_appointments where organization_id=p_org and id=e.entity_id and revision=(e.payload->>'appointment_revision')::bigint and status='no_show' and outcome_recorded_at is not null;
+ -- 0302: los eventos del reloj de recetas (cron/recetas). El contacto sale de la
+ -- entidad; la fronteira, del `service_origin` de tipo command que el cron estampa.
+ elsif e.event_type='appointment.reminder' and e.entity_kind='calendar_appointment' then
+   select contact_id into entity_contact from public.calendar_appointments where organization_id=p_org and id=e.entity_id and status='confirmed';
+ elsif e.event_type in ('contact.silent','contact.dormant') and e.entity_kind='contact' then
+   select id into entity_contact from public.contacts where organization_id=p_org and id=e.entity_id;
+ elsif e.event_type='lead.idle' and e.entity_kind='crm_lead' then
+   select contact_id into entity_contact from public.crm_leads where organization_id=p_org and id=e.entity_id and status='open';
+ elsif e.event_type='message.received' and e.entity_kind='message' then
+   select contact_id,jsonb_build_object('organization_id',organization_id,'contact_id',contact_id,
+     'conversation_id',conversation_id,'service_revision',service_revision,'demanda_id',demanda_id,'demanda_revision',demanda_revision)
+     into entity_contact,boundary from public.messages where organization_id=p_org and id=e.entity_id and direction='inbound';
+ else raise exception 'service_event_origin_unsupported' using errcode='40001'; end if;
+ if entity_contact is distinct from p_contact or not exists(select 1 from public.contacts where organization_id=p_org and id=p_contact and not is_anonymized and is_merged_into is null) then
+   raise exception 'service_scope_mismatch' using errcode='23503'; end if;
+ origin:=e.payload->'service_origin';
+ if origin->>'kind'='event' then
+   if origin->>'organization_id' is distinct from p_org::text or origin->>'contact_id' is distinct from p_contact::text then raise exception 'service_scope_mismatch' using errcode='23503'; end if;
+   root_event:=(origin->>'event_id')::uuid;
+   if root_event is null then raise exception 'service_stale' using errcode='40001'; end if;
+   continue;
+ end if;
+ exit;
+ end loop;
+ if boundary is not null or origin->>'kind'='continuation' then
+   boundary:=coalesce(boundary,origin->'boundary');
+   select channel_session_id into sid from public.conversations where organization_id=p_org and contact_id=p_contact and id=(boundary->>'conversation_id')::uuid;
+   if p_session is not null and p_session is distinct from sid then raise exception 'service_channel_mismatch' using errcode='23503'; end if;
+ elsif origin->>'kind'='command' then
+   observed:=origin->'observed';
+   if observed->>'organization_id' is distinct from p_org::text or observed->>'contact_id' is distinct from p_contact::text then raise exception 'service_scope_mismatch' using errcode='23503'; end if;
+   if jsonb_typeof(observed->'destinations')='array' then
+     sid:=coalesce(p_session,(observed->>'default_session_id')::uuid);
+     select item->'observed' into observed from jsonb_array_elements(observed->'destinations') item where item->>'channel_session_id'=sid::text;
+   else
+     -- Compatibilidade com snapshot anterior: prova somente sua conversa, nunca ausência de outro canal.
+     select channel_session_id into sid from public.conversations where organization_id=p_org and contact_id=p_contact and id=(observed->>'conversation_id')::uuid;
+     if p_session is not null and p_session is distinct from sid then raise exception 'service_channel_mismatch' using errcode='23503'; end if;
+   end if;
+ else raise exception 'service_stale' using errcode='40001'; end if;
+ if sid is null then raise exception 'service_stale' using errcode='40001'; end if;
+ if not exists(select 1 from public.channel_sessions where id=sid and organization_id=p_org and archived_at is null) then raise exception 'service_channel_mismatch' using errcode='23503'; end if;
+ if boundary is null and observed is null then raise exception 'service_stale' using errcode='40001'; end if;
+ select service_boundary into current_boundary from public.event_service_origins where organization_id=p_org and event_id=root_event and channel_session_id=sid;
+ if found then boundary:=current_boundary;
+ elsif boundary is null then
+   -- PARA UM EVENTO, `absent` E PROCEDENCIA — NAO REIVINDICACAO DE ESTADO.
+   --
+   -- O CAS de `fn_service_begin` existe para que dois ATORES com a mesma
+   -- observacao "ausente" nao ajam os dois: o segundo tem de perder, e o
+   -- invariante de `fn_service_begin` guarda isso. Um evento e outra coisa: o
+   -- retrato `absent` diz "quando este evento foi EMITIDO nao havia
+   -- atendimento", e a resolucao de cada evento ja e idempotente pelo memo
+   -- `event_service_origins` logo acima — nao ha corrida a arbitrar aqui.
+   --
+   -- Sem esta distincao o caminho ORDINARIO morria: um lead criado e depois
+   -- movido de etapa gera DOIS eventos, cada um com seu retrato `absent`;
+   -- resolver o primeiro cria a conversa e o segundo levantava 40001 — que
+   -- `serviceForEvent` engole como `stale_origin`, entao o follow-up de etapa
+   -- simplesmente nao nascia, sem erro em lugar nenhum.
+   --
+   -- Zerar `observed` so quando a conversa JA existe mantem o CAS de pe para o
+   -- retrato que descreve uma fronteira concreta (esse continua sendo conferido
+   -- contra a vigente) e para todo chamador direto de `fn_service_begin`.
+   if observed->>'absent' = 'true' and exists(
+        select 1 from public.conversations
+         where organization_id=p_org and contact_id=p_contact
+           and channel_session_id=sid and not is_group) then
+     observed:=null;
+   end if;
+   boundary:=public.fn_service_begin(p_org,p_contact,sid,observed) - 'status' - 'demanda_fechada_em' - 'service_started_at';
+ end if;
+ if boundary->>'organization_id' is distinct from p_org::text or boundary->>'contact_id' is distinct from p_contact::text then
+   raise exception 'service_scope_mismatch' using errcode='23503'; end if;
+ cid:=(boundary->>'conversation_id')::uuid;
+ if p_session is not null and not exists(select 1 from public.conversations where organization_id=p_org and id=cid and contact_id=p_contact and channel_session_id=p_session) then
+   raise exception 'service_channel_mismatch' using errcode='23503'; end if;
+ current_boundary:=public.fn_service_boundary(p_org,cid);
+ if current_boundary is null or current_boundary->>'status' in ('closed','resolved','archived')
+   or current_boundary->>'demanda_fechada_em' is not null
+   or (current_boundary - 'status' - 'demanda_fechada_em' - 'service_started_at') is distinct from boundary then
+   raise exception 'service_stale' using errcode='40001'; end if;
+ insert into public.event_service_origins(event_id,channel_session_id,organization_id,service_boundary) values(root_event,sid,p_org,boundary)
+ on conflict(event_id,channel_session_id) do nothing;
+ return boundary;
+end; $$;
+revoke all on function public.fn_service_event_origin(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.fn_service_event_origin(uuid,uuid,uuid,uuid) to service_role;
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -27977,6 +28480,24 @@ create policy "capture_forms_manager_write" on public.capture_forms
   );
 
 notify pgrst, 'reload schema';
+-- ---- recetas de automatización y filtro «sin responder» (migration 0297) ----
+-- `recipe_key` marca qué filas de automation_rules vienen del catálogo de recetas
+-- (lib/recetas/catalogo.ts): una por receta y organización, para que «prender» sea
+-- idempotente. `sin_responder` es la cuenta «escribió y nadie contestó» hecha en la
+-- base, porque la API pagina y filtrar después en memoria devolvería páginas cortas.
+alter table public.automation_rules
+  add column if not exists recipe_key text;
+
+create unique index if not exists uniq_automation_rules_recipe
+  on public.automation_rules (organization_id, recipe_key)
+  where recipe_key is not null;
+
+alter table public.conversations
+  add column if not exists sin_responder boolean
+  generated always as (
+    last_inbound_at is not null
+    and (last_outbound_at is null or last_outbound_at < last_inbound_at)
+  ) stored;
 -- ---- user_recovery_codes só com service role (migration 0277) ----
 -- Auditoria 2026-11-13, H1: com GRANT ALL a authenticated, uma sessão aal1 inseria
 -- o hash de um código próprio e `useRecoveryCode` apagava os fatores TOTP.

@@ -6,7 +6,6 @@ import { beginServiceAtOrigin, assertServiceBoundarySupabase } from "@/lib/atend
  *   - conversations.status='pending', bot_silenced_until='infinity'
  *   - crm_lead_activities INSERT (type='handoff_triggered') quando há lead vinculado
  *   - event_log INSERT event_type='ai.handoff_triggered'
- *   - Realtime broadcast `org:<org>:queue` event=handoff_pending
  *   - api_audit_log action='ai.handoff_triggered' (+ mcp.tool_called no server core)
  *
  * v2 (G6-01 / INB-12): a ESCOLHA do destino usa o roteamento G5 — UM algoritmo:

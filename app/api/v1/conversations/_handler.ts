@@ -205,6 +205,7 @@ export async function listConversationsHandler(
   // Este handler usa o admin client, que passa por cima da RLS: esse filtro é a Única
   // barreira. Consulta nova só para os não lidos nasceria sem barreira nenhuma.
   if (q.unread) query = query.gt("unread_count_for_assignee", 0);
+  if (q.sin_responder) query = query.eq("sin_responder", true);
 
   if (q.assigned_to === "me") {
     if (ctx.actor.type !== "user") {

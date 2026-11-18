@@ -12,7 +12,8 @@ export type ActionType =
   | "add_tag"
   | "assign_owner"
   | "call_webhook"
-  | "start_message_flow";
+  | "start_message_flow"
+  | "notify_owner";
 
 export const TRIGGER_LABELS: Record<TriggerEvent, string> = {
   "lead.created": "Quando entrar um contato novo (webhook)",
@@ -28,6 +29,10 @@ export const TRIGGER_LABELS: Record<TriggerEvent, string> = {
   "appointment.rescheduled": "Quando um horário for remarcado",
   "appointment.cancelled": "Quando um horário for cancelado",
   "contact.birthday": "No aniversário de um contato",
+  "appointment.reminder": "Antes de um horário (aviso de 24 h ou 2 h)",
+  "contact.silent": "Quando um contato não responde em 48 h",
+  "contact.dormant": "Quando um contato fica 90 dias sem conversar",
+  "lead.idle": "Quando um lead fica 3 dias sem movimento",
 };
 
 export const ACTION_LABELS: Record<ActionType, string> = {
@@ -38,4 +43,5 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   assign_owner: "Atribuir a um atendente",
   call_webhook: "Avisar outro sistema (webhook)",
   start_message_flow: "Iniciar fluxo de mensagem",
+  notify_owner: "Avisar o responsável (cria uma tarefa)",
 };

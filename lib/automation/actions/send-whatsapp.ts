@@ -9,10 +9,21 @@ import { adiarAteAJanelaAbrir } from "@/lib/automation/janela-do-canal";
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import { reportarEnvio, type MensagemEnviada } from "@/lib/automation/desfecho-do-envio";
 import { checarGuardasDeContato } from "@/lib/automation/guarda-do-contato";
+import { estadoDaJanela } from "@/lib/channels/janela";
+import { montarMensajeDeReceta, type MetaTemplateDeRegla } from "@/lib/automation/mensaje-de-receta";
+
+/**
+ * El aviso de un turno (`appointment.reminder`) habla del propio turno: la
+ * protección de agenda, que frena cobros y seguimientos mientras la persona
+ * tiene un turno vivo, no le corresponde. Sin esta excepción las recetas de
+ * recordatorio (24 h / 2 h) quedaban adiadas hasta el inicio del turno y nunca
+ * salían — el turno vivo es justamente lo que las dispara.
+ */
+const esAvisoDelTurno = (ctx: ActionCtx) => ctx.event.event_type === "appointment.reminder";
 
 async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): Promise<string | null> {
   const contato = checarGuardasDeContato(ctx);
-  if (contato.ok) {
+  if (contato.ok && !esAvisoDelTurno(ctx)) {
     const protection = (await protecaoAgendaSupabase(ctx.admin, ctx.organizationId, [contato.contact.id])).get(contato.contact.id)!;
     if (protection.motivo === "leitura_indisponivel") throw new Error("agenda_read_failed");
     if (protection.adiar) return protection.reavaliar_em;
@@ -44,21 +55,46 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
   // O espaçamento é COMPARTILHADO com a ação de IA (mesmo número, mesmo
   // contador) — ver lib/automation/throttle.ts.
   try {
-    await assertAgendaEffectSupabase(ctx.admin, { organizationId: ctx.organizationId, contactId: contact.id });
+    if (!esAvisoDelTurno(ctx)) {
+      await assertAgendaEffectSupabase(ctx.admin, { organizationId: ctx.organizationId, contactId: contact.id });
+    }
     const boundary = await serviceForAutomation(ctx, contact.id, sessionId);
     const conversationId = boundary.conversation_id;
     await espacarEnvio(sessionId);
     const body = renderTemplate(template, ctx.context);
+
+    // Con `meta_template` la regla sabe salir de la ventana de 24 h: dentro va
+    // texto libre, fuera va la plantilla aprobada. Sin ella, todo sigue como antes.
+    const metaTemplate = (config.meta_template ?? null) as MetaTemplateDeRegla | null;
+    let entrega: ReturnType<typeof montarMensajeDeReceta> = { type: "text", body };
+    if (metaTemplate) {
+      const { data: conv } = await ctx.admin
+        .from("conversations")
+        .select("last_inbound_at, channel_sessions:channel_session_id (provider)")
+        .eq("id", conversationId)
+        .eq("organization_id", ctx.organizationId)
+        .maybeSingle();
+      const sesion = (conv as { channel_sessions?: { provider?: string } | { provider?: string }[] | null } | null)
+        ?.channel_sessions;
+      const provider = Array.isArray(sesion) ? sesion[0]?.provider : sesion?.provider;
+      const ventana = estadoDaJanela(provider, (conv as { last_inbound_at?: string | null } | null)?.last_inbound_at ?? null, new Date());
+      entrega = montarMensajeDeReceta(ventana, body, metaTemplate, ctx.context);
+      if (entrega.type === "skip") {
+        return { type: "send_whatsapp_message", status: "skipped", detail: { reason: entrega.reason } };
+      }
+    }
+
     const message = await sendMessageHandler(
       ctx.admin,
       {
         organization_id: ctx.organizationId,
         serviceBoundary: boundary,
-        proactiveContext: { organizationId: ctx.organizationId, contactId: contact.id },
+        // Sin contexto proactivo en el aviso del turno: ese contexto solo existe para la protección de agenda.
+        proactiveContext: esAvisoDelTurno(ctx) ? undefined : { organizationId: ctx.organizationId, contactId: contact.id },
         actor: { type: "webhook_source", id: ctx.ruleId },
         requestId: `rule:${ctx.ruleId}`,
       },
-      { conversation_id: conversationId, type: "text", body } as Parameters<typeof sendMessageHandler>[2],
+      { conversation_id: conversationId, ...entrega } as Parameters<typeof sendMessageHandler>[2],
     );
     // O desfecho vem do ESTADO DA MENSAGEM, nunca da ausência de exceção:
     // `sendMessageHandler` marca `failed`/`queued` e devolve normalmente (ver
