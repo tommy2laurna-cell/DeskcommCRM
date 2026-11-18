@@ -1,4 +1,5 @@
-import webpush from "web-push";
+// web-push 4 es ESM sin export default: se importa el namespace.
+import * as webpush from "web-push";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
