@@ -253,6 +253,7 @@ export async function ingestMetaInbound(
     messageId: messageId || null,
     channelSessionId: sessao.id,
     texto: e.text ?? null,
+    viaBotao: e.fromButton === true,
     nomeDoContato: e.profileName ?? null,
     origem: "meta_webhook",
   });

@@ -99,10 +99,19 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Todo MENOS la página pública del formulario, que la web del cliente
+        // incrusta en un iframe (ver el bloque de abajo).
+        source: "/((?!f/).*)",
+        headers: [{ key: "X-Frame-Options", value: "DENY" }],
+      },
+      {
+        source: "/f/:slug",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // microphone=(self): o gravador de voz do composer (PTT estilo WhatsApp)
           // usa getUserMedia({audio}); microphone=() bloquearia em TODA origem,
@@ -120,7 +129,7 @@ const nextConfig: NextConfig = {
 };
 
 // SENTRY_DSN=off apaga a telemetria também no build: sem plugin, sem upload de
-// source maps e sem a rota de túnel /monitoring. A organização e o projeto do
+// source maps. A organização e o projeto do
 // Sentry vêm do ambiente de quem instala; nada do autor fica no código.
 const sentryApagado = process.env.SENTRY_DSN === "off";
 
@@ -140,12 +149,6 @@ export default sentryApagado ? nextConfig : withSentryConfig(nextConfig, {
 
   // Upload a larger set of source maps for prettier stack traces (increases build time)
   widenClientFileUpload: true,
-
-  // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
-  // This can increase your server load as well as your hosting bill.
-  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-  // side errors will fail.
-  tunnelRoute: "/monitoring",
 
   webpack: {
     // Herança do wizard do Sentry (instrumentação automática de cron monitors).

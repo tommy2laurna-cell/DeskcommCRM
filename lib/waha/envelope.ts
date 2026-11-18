@@ -11,8 +11,9 @@
  * `from` não-string a chamada LANÇA, o `try/catch` da rota engole, e a
  * requisição devolve **200** — o provider risca o evento da fila achando que
  * entregou. Descarte mudo com carimbo de sucesso, no caminho que ingere
- * mensagem de cliente. E `WAHA_WEBHOOK_REQUIRE_SIGNATURE` é `false` por padrão,
- * então esse caminho é alcançável sem segredo nenhum.
+ * mensagem de cliente. E `WAHA_WEBHOOK_REQUIRE_SIGNATURE` era `false` por
+ * padrão, então esse caminho era alcançável sem segredo nenhum (H5 fechou a
+ * rota global; a /waha/[token] segue a flag).
  *
  * ─── A REGRA deste arquivo (leia antes de acrescentar campo) ────────────────
  *

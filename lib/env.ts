@@ -74,6 +74,11 @@ const schema = z.object({
   INTERNAL_SECRET: required("INTERNAL_SECRET"),
   /** Optional dedicated secret for cron endpoints (S-06.07 onwards). */
   INTERNAL_CRON_SECRET: z.string().optional().default(""),
+  /**
+   * Transporte de las campañas. Vacío = la API de Meta (lo normal). `simulado` NO llama a
+   * Meta: marca el envío como hecho con un id `sim:`; existe para las pruebas de jornada.
+   */
+  CAMPAIGNS_TRANSPORT: z.enum(["", "simulado"]).optional().default(""),
 
   // Laboratório local de extensões: origem HTTP exata em 127.0.0.1. O cliente
   // recusa a exceção se a URL do app não for loopback. Vazio mantém HTTPS público.
@@ -148,12 +153,15 @@ const schema = z.object({
   // contêiner do WAHA; o app precisa dele para CONFERIR a assinatura — e não o
   // declarava aqui, então nunca teve como verificar nada.
   WAHA_HMAC_SECRET: z.string().optional().default(""),
-  // "true" exige assinatura válida em todo webhook do WAHA. Fica desligado por
-  // padrão porque o WAHA Core não assina (medido: 2026.7.2 CORE manda os
-  // eventos sem header mesmo com WHATSAPP_HOOK_HMAC configurado), e exigir
-  // derrubaria a ingestão de mensagens. Ligue se usa WAHA Plus ou um proxy que
-  // assine — aí a verificação passa a ser obrigatória.
-  WAHA_WEBHOOK_REQUIRE_SIGNATURE: z.string().optional().default("false"),
+  // "true" exige assinatura válida em todo webhook do WAHA, também na rota
+  // /waha/[token]. Default "true" em produção (H5). A rota global exige firma
+  // sempre, com qualquer valor daqui. O "Core não assina" medido em 2026.7.2 era
+  // o compose passando WHATSAPP_HOOK_HMAC, nome que o WAHA não lê; com
+  // WHATSAPP_HOOK_HMAC_KEY ele assina. Ver lib/waha/webhook-auth.ts.
+  WAHA_WEBHOOK_REQUIRE_SIGNATURE: z
+    .string()
+    .optional()
+    .default(isProd ? "true" : "false"),
 
   // ─── Chamada de voz WhatsApp (WaCalls, spec 18) ───
   //
@@ -468,6 +476,15 @@ if (!env.OPENAI_API_KEY) {
 if (!env.IMPERSONATE_COOKIE_SECRET || env.IMPERSONATE_COOKIE_SECRET.length < 32) {
   console.warn(
     "[env] IMPERSONATE_COOKIE_SECRET not set or shorter than 32 chars — impersonate flow will return 503 at runtime.",
+  );
+}
+// H5: a rota global do WAHA só aceita evento assinado com este segredo. Vazio
+// (ou curto) em produção = TODA mensagem de WhatsApp toma 401 e nada entra.
+if (env.NODE_ENV === "production" && !isBuildPhase && env.WAHA_HMAC_SECRET.trim().length < 16) {
+  console.warn(
+    "[env] WAHA_HMAC_SECRET ausente ou com menos de 16 caracteres — o webhook do WAHA vai " +
+      "recusar (401) todas as mensagens. Gerar com `openssl rand -hex 32`, pôr no .env e " +
+      "recriar waha, app e worker.",
   );
 }
 
