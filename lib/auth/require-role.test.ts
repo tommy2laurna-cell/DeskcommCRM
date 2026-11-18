@@ -201,4 +201,13 @@ describe("requireRole — helper único (spec 13 §4)", () => {
     const granted = await requireRole("admin", { allowPlatformAdmin: true });
     expect(granted.ok).toBe(true);
   });
+  it("platform admin support_readonly NO escribe en otro tenant (aislamiento #2), pero sí lee", async () => {
+    const OTRA = "44444444-4444-4444-8444-444444444444";
+    session(null, { platformAdmin: true });
+    vi.mocked(loadAuthUser).mockResolvedValue({ ...authUserFixture(null, true), platform_admin_scope: "support_readonly" });
+    const escribe = await requireRole("admin", { allowPlatformAdmin: true, organizationId: OTRA });
+    expect(escribe.ok).toBe(false);
+    const lee = await requireRole("viewer", { allowPlatformAdmin: true, organizationId: OTRA });
+    expect(lee.ok).toBe(true);
+  });
 });
