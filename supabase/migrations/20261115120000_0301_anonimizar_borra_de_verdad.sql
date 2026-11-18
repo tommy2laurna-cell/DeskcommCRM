@@ -1,4 +1,4 @@
--- 0295 — «Anonimizar» borra de verdad (auditoría 2026-11-14, H7).
+-- 0301 — «Anonimizar» borra de verdad (auditoría 2026-11-14, H7).
 --
 -- La ruta POST /api/v1/lgpd/anonymize hacía el paso 1 (contacto) con
 -- `fn_lgpd_anonymize_contact` y redactaba leads y actividades, pero NUNCA

@@ -7,7 +7,7 @@ import { replyFixture } from "../support/autonomia-fixture";
 import { seedGov } from "./gov-helpers";
 
 /**
- * «ANONIMIZAR» BORRA DE VERDAD (auditoría 2026-11-14, H7 — migration 0295).
+ * «ANONIMIZAR» BORRA DE VERDAD (auditoría 2026-11-14, H7 — migration 0301).
  *
  * La ruta `POST /api/v1/lgpd/anonymize` hacía el paso 1 (contacto) y nunca
  * llamaba a `fn_lgpd_cascade_redact_contact`: el cuerpo de los mensajes, el

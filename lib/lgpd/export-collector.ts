@@ -252,8 +252,8 @@ export interface ExportPayload {
    */
   voice_calls: VoiceCallRow[];
   /**
-   * Lo que la IA guardó sobre la persona (migration 0295). Entra por la misma
-   * regla que `voice_calls`: la 0295 lo puso en la cascada de redacción, y lo
+   * Lo que la IA guardó sobre la persona (migration 0301). Entra por la misma
+   * regla que `voice_calls`: la 0301 lo puso en la cascada de redacción, y lo
    * que se borra a pedido del titular se le entrega a pedido de él.
    */
   ia?: {

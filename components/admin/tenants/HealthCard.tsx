@@ -27,15 +27,15 @@ export interface HealthCardProps {
 // ---------------------------------------------------------------------------
 
 const STATUS_BORDER: Record<HealthStatus, string> = {
-  ok: "border-emerald-500/60 dark:border-emerald-600/50",
-  warning: "border-amber-400/70 dark:border-amber-500/50",
-  critical: "border-red-500/70 dark:border-red-600/60",
+  ok: "border-success/40",
+  warning: "border-warning/40",
+  critical: "border-error/40",
 };
 
 const STATUS_BADGE_BG: Record<HealthStatus, string> = {
-  ok: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-  warning: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  critical: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  ok: "bg-success-bg text-success-fg dark:text-success",
+  warning: "bg-warning-bg text-warning-fg dark:text-warning",
+  critical: "bg-error-bg text-error-fg dark:text-error",
 };
 
 const STATUS_LABEL: Record<HealthStatus, string> = {
@@ -45,9 +45,9 @@ const STATUS_LABEL: Record<HealthStatus, string> = {
 };
 
 const STATUS_DOT: Record<HealthStatus, string> = {
-  ok: "bg-emerald-500",
-  warning: "bg-amber-400",
-  critical: "bg-red-500",
+  ok: "bg-success",
+  warning: "bg-warning",
+  critical: "bg-error",
 };
 
 // ---------------------------------------------------------------------------
