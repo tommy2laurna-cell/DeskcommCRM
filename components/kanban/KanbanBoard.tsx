@@ -15,6 +15,8 @@ import type { Pipeline, Stage } from "@/lib/kanban/types";
 import { StageColumn } from "./StageColumn";
 import { LeadDossier } from "./LeadDossier";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
+import { usePuntajeReglas } from "@/hooks/puntaje/usePuntajeReglas";
+import { calcularPuntaje, type PuntajeCalculado } from "@/lib/puntaje/reglas";
 
 interface KanbanBoardProps {
   pipelineId: string;
@@ -37,7 +39,11 @@ interface KanbanBoardProps {
   leadInicial?: string | null;
 }
 
-function groupLeadsByStage(stages: Stage[], leads: Lead[]): Map<string, Lead[]> {
+function groupLeadsByStage(
+  stages: Stage[],
+  leads: Lead[],
+  puntajes?: Map<string, PuntajeCalculado> | null,
+): Map<string, Lead[]> {
   const map = new Map<string, Lead[]>();
   for (const stage of stages) map.set(stage.id, []);
   for (const lead of leads) {
@@ -46,7 +52,14 @@ function groupLeadsByStage(stages: Stage[], leads: Lead[]): Map<string, Lead[]> 
   }
   // Already ordered by position_in_stage at fetch time, but be defensive.
   for (const list of map.values()) {
-    list.sort((a, b) => a.position_in_stage - b.position_in_stage);
+    list.sort((a, b) => {
+      // Orden por puntaje: el más alto primero; el empate cae al orden manual.
+      if (puntajes) {
+        const d = (puntajes.get(b.id)?.total ?? 0) - (puntajes.get(a.id)?.total ?? 0);
+        if (d !== 0) return d;
+      }
+      return a.position_in_stage - b.position_in_stage;
+    });
   }
   return map;
 }
@@ -146,10 +159,40 @@ export function KanbanBoard({
     ? (data?.leads.find((l) => l.id === dossieId) ?? null)
     : null;
 
+  // Puntaje de prioridad: se calcula acá, con las reglas de la organización, y
+  // viaja a la tarjeta ya resuelto (la tarjeta no sabe de reglas).
+  const reglasDePuntaje = usePuntajeReglas();
+  const [ordenPorPuntaje, setOrdenPorPuntaje] = useState(false);
+  const puntajes = useMemo(() => {
+    if (!data) return null;
+    const ahora = new Date();
+    const nombres = new Map(data.stages.map((s) => [s.id, s.name]));
+    const m = new Map<string, PuntajeCalculado>();
+    for (const l of data.leads) {
+      if (l.status !== "open") continue;
+      m.set(
+        l.id,
+        calcularPuntaje(
+          {
+            stageId: l.stage_id,
+            valueCents: l.value_cents,
+            source: l.source,
+            ultimoContactoEn: l.last_activity_at ?? l.created_at,
+            clienteEscribio: (l.conversa?.unread ?? 0) > 0,
+          },
+          reglasDePuntaje,
+          ahora,
+          (id) => nombres.get(id) ?? "esta etapa",
+        ),
+      );
+    }
+    return m;
+  }, [data, reglasDePuntaje]);
+
   const grouped = useMemo(() => {
     if (!data) return null;
-    return groupLeadsByStage(data.stages, data.leads);
-  }, [data]);
+    return groupLeadsByStage(data.stages, data.leads, ordenPorPuntaje ? puntajes : null);
+  }, [data, ordenPorPuntaje, puntajes]);
 
   // Um conjunto por vez, e não um card por vez: o board recebe o resultado do
   // gesto já resolvido pela coluna (um card, um intervalo, a etapa inteira). A
@@ -245,7 +288,22 @@ export function KanbanBoard({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex h-full gap-3 overflow-x-auto p-4">
+      <div className="flex h-full flex-col">
+        <div className="flex items-center justify-end gap-2 px-4 pt-3">
+          <button
+            type="button"
+            data-testid="orden-por-puntaje"
+            aria-pressed={ordenPorPuntaje}
+            onClick={() => setOrdenPorPuntaje((v) => !v)}
+            className={
+              "rounded-md border border-border px-3 py-1 text-xs " +
+              (ordenPorPuntaje ? "border-accent bg-accent/10 text-text" : "text-text-muted")
+            }
+          >
+            {ordenPorPuntaje ? t("Ordenado por puntaje") : t("Ordenar por puntaje")}
+          </button>
+        </div>
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
         {data.stages.map((stage) => (
           <StageColumn
             key={stage.id}
@@ -256,12 +314,14 @@ export function KanbanBoard({
             coolingIds={coolingIds}
             reactivations={reactivations}
             pulses={pulsesProp ?? queryResult.pulses}
+            puntajes={puntajes ?? undefined}
             canonicalTags={canonicalTags}
             selectedLeadIds={selectedLeadIds}
             onSelectMany={handleSelectMany}
             onOpen={setDossieId}
           />
         ))}
+      </div>
       </div>
       {leadDoDossie && (
         <LeadDossier

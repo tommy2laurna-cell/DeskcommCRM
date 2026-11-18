@@ -1,14 +1,21 @@
 /**
- * GET /api/v1/lgpd/requests
+ * GET  /api/v1/lgpd/requests — lista paginada de lgpd_requests da org ativa.
+ * POST /api/v1/lgpd/requests — registra um pedido do titular (acesso ou
+ *      supressão) que chegou por fora do CRM: e-mail, WhatsApp, carta, balcão.
+ *      Era o canal que faltava (auditoria 2026-11-14, H8). O prazo sai da Lei
+ *      25.326 (`lib/lgpd/sla.ts`), contado da data em que a pessoa pediu.
+ *      Executar continua sendo o `approve`; aqui só nasce o pedido e o prazo.
  *
- * Lista paginada de lgpd_requests para o tenant ativo.
- * Apenas role >= admin pode acessar (lgpd:execute permission).
- * organization_id sempre resolvido de sessão confiável — nunca do body.
+ * Apenas role >= admin. organization_id sempre da sessão — nunca do body.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
+import { audit } from "@/lib/audit";
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createLgpdRequest } from "@/lib/lgpd/repository";
+import { ABIERTO_PARA_ABOGADO, PLAZOS_LEY_25326 } from "@/lib/lgpd/sla";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
@@ -123,4 +130,130 @@ export async function GET(req: NextRequest): Promise<Response> {
       has_more: offset + limit < total,
     },
   });
+}
+
+const bodySchema = z
+  .object({
+    request_type: z.enum(["data_request", "redact"]),
+    contact_id: z.string().uuid(),
+    /** Quando o titular pediu. O prazo legal corre daí, não de quando se cadastrou. */
+    received_at: z.string().datetime({ offset: true }).optional(),
+    canal: z.enum(["email", "whatsapp", "telefono", "presencial", "carta", "outro"]).default("outro"),
+    detalle: z.string().max(1000).optional(),
+  })
+  .strict();
+
+/** Tolerância de relógio para `received_at` "no futuro". */
+const FOLGA_DE_RELOGIO_MS = 5 * 60 * 1000;
+
+export async function POST(req: NextRequest): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = randomUUID();
+
+  const authz = await requireRole("admin", {
+    requestId,
+    resource: "lgpd_requests",
+    allowPlatformAdmin: true,
+  });
+  if (!authz.ok) return authz.response;
+  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const orgId = authz.org.orgId;
+
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return fail("validation_failed", t("Corpo da requisição inválido."), 422, { requestId });
+  }
+  const parsed = bodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return fail("validation_failed", t("Parâmetros inválidos."), 422, {
+      details: parsed.error.flatten(),
+      requestId,
+    });
+  }
+  const input = parsed.data;
+
+  const recebido = input.received_at ? new Date(input.received_at) : new Date();
+  if (recebido.getTime() > Date.now() + FOLGA_DE_RELOGIO_MS) {
+    return fail("validation_failed", t("A data do pedido não pode estar no futuro."), 422, { requestId });
+  }
+
+  // O contato tem de ser da org ativa — lido com RLS E filtro explícito.
+  const supabase = await createClient();
+  const { data: contato, error: contatoErr } = await supabase
+    .from("contacts")
+    .select("id, is_anonymized")
+    .eq("organization_id", orgId)
+    .eq("id", input.contact_id)
+    .maybeSingle();
+  if (contatoErr) return fail("internal_error", contatoErr.message, 500, { requestId });
+  if (!contato) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+  // Supresión ya cumplida: abrir otro plazo legal sería afirmar un pendiente que
+  // no existe. El acceso sí sigue (la persona puede pedir qué quedó).
+  if (input.request_type === "redact" && contato.is_anonymized) {
+    return fail("state_conflict", t("Este contato já foi anonimizado."), 409, { requestId });
+  }
+
+  // Duplo clique ou o mesmo pedido cadastrado duas vezes: devolve o aberto, não
+  // cria um segundo prazo para o mesmo direito.
+  const { data: aberto, error: abertoErr } = await supabase
+    .from("lgpd_requests")
+    .select("id, due_at, status")
+    .eq("organization_id", orgId)
+    .eq("contact_id", input.contact_id)
+    .eq("request_type", input.request_type)
+    .in("status", ["received", "processing"])
+    .limit(1)
+    .maybeSingle();
+  if (abertoErr) return fail("internal_error", abertoErr.message, 500, { requestId });
+  const plazo = PLAZOS_LEY_25326[input.request_type];
+  if (aberto) {
+    return ok({ ...aberto, plazo, ya_existia: true }, { requestId });
+  }
+
+  let criado: { id: string; due_at: string };
+  try {
+    criado = await createLgpdRequest({
+      organizationId: orgId,
+      requestType: input.request_type,
+      source: "manual",
+      contactId: input.contact_id,
+      receivedAt: recebido,
+      payload: {
+        canal: input.canal,
+        ...(input.detalle ? { detalle: input.detalle } : {}),
+        registrado_por: authz.user.id,
+      },
+    });
+  } catch (err) {
+    console.error("[lgpd.requests] create", (err as Error).message);
+    return fail("internal_error", t("Não foi possível registrar a solicitação."), 500, { requestId });
+  }
+
+  await audit({
+    action: "lgpd.request_created",
+    actorUserId: authz.user.id,
+    organizationId: orgId,
+    resourceType: "lgpd_request",
+    resourceId: criado.id,
+    requestId,
+    // Sin `detalle`: texto livre pode ter dado pessoal, e ele mora no pedido.
+    metadata: { request_type: input.request_type, canal: input.canal, contact_id: input.contact_id },
+  });
+
+  return ok(
+    {
+      id: criado.id,
+      status: "received",
+      received_at: recebido.toISOString(),
+      due_at: criado.due_at,
+      plazo,
+      abierto_para_abogado: ABIERTO_PARA_ABOGADO,
+      ya_existia: false,
+    },
+    { requestId, status: 201 },
+  );
 }

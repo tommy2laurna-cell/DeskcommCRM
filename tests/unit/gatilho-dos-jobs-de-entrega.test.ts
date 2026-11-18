@@ -130,6 +130,18 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // --- os outros checks obrigatórios ------------------------------------------
   // Mesmo mecanismo, mesmo desfecho: `skipped` conta como check satisfeito.
   // Desligar qualquer um destes faz o PR entrar sem ter sido testado.
+  "entrada-prospectos.yml::prospectos": {
+    condicao: null,
+    efeito: "Prueba de integración de POST /api/v1/prospectos; sin ella la entrada de n8n queda sin medir.",
+  },
+  "tablero.yml::tablero": {
+    condicao: null,
+    efeito: "Prueba de integración del tablero (números contra la base) y del journey a 390 px; sin ella el tablero queda sin medir.",
+  },
+  "captar.yml::captar": {
+    condicao: null,
+    efeito: "Journey de Captar (formulario publico -> contacto con origen); sin el, la captacion fuera de WhatsApp queda sin medir.",
+  },
   "ci.yml::verify": {
     condicao: null,
     efeito: "Este é o check obrigatório `verify` (typecheck + lint + test:unit).",
@@ -153,6 +165,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   // primeira major que reprovasse CANCELARIA a outra, e o relatório diria
   // `cancelled` em vez de medir as duas — cobertura declarada que o CI cancela é
   // o modo de falha que a #454 fecha.
+  "liquid-capturas.yml::capturas": {
+    condicao: null,
+    efeito:
+      "Saca as capturas antes/depois do Liquid e mede o contraste axe das telas. Pulado, " +
+      "uma tela que reprova contraste passa sem ninguém ver.",
+  },
   "operacion.yml::restauracion": {
     condicao: null,
     efeito:

@@ -1,0 +1,235 @@
+/* ==========================================================================
+   liquid.css — capa Liquid del Conectado (LIQUID-UI.md, 04-CRM-LRN).
+   Los tokens de color opacos viven en globals.css con sus nombres de siempre
+   (--color-*), a propósito: lib/branding/contraste.ts los lee de ahí. Acá van
+   el vidrio (--lq-v*), el fondo, el movimiento y las clases que usan los
+   componentes. Tema por defecto: oscuro (D2).
+
+   Acento: no se calcula acá. Sale de la marca de la instalación
+   (<style id="marca-instalacao">, lib/branding), que ya garantiza 4,5:1 contra
+   las superficies de cada tema. Estas variables solo le ponen nombre Liquid.
+   Fuentes Geist / Geist Mono: next/font/local en app/layout.tsx.
+   ========================================================================== */
+
+:root {
+  --lq-r-ctrl: 12px; --lq-r-card: 13px; --lq-r-panel: 24px; --lq-r-pill: 999px;
+  --lq-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --lq-d-rapido: 120ms; --lq-d-base: 200ms; --lq-d-lento: 360ms; --lq-d-titulo: 700ms;
+}
+
+:root, [data-theme] {
+  --acento-fondo: var(--color-accent);
+  --acento-sobre: var(--color-accent-fg);
+  --acento-texto: var(--color-accent);
+}
+
+/* ---- 3. Tema OSCURO (por defecto) --------------------------------------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Fondo y texto: grises fríos, sin tinte cálido */
+  --lq-fondo: #0a0a0b;
+  --lq-texto: #f5f5f7;       /* títulos */
+  --lq-cuerpo: #c9c9d1;
+  --lq-sec: #8e8e99;         /* secundario, rótulos */
+  --lq-deshab: #5b5b66;      /* solo deshabilitado/placeholder: no es texto esencial */
+
+  /* Superficies opacas de referencia (para quien necesite un hex: tablas, contraste, e-mails) */
+  --lq-superficie: #121216;
+  --lq-superficie-2: #1a1a20;
+  --lq-fila: rgba(26, 26, 32, 0.92);       /* tarjeta de kanban / fila: SIN desenfoque */
+  --lq-fila-hover: rgba(34, 34, 42, 0.96);
+  --lq-hover: rgba(255, 255, 255, 0.06);
+  --lq-seleccion: rgba(255, 255, 255, 0.09);
+  --lq-linea: rgba(255, 255, 255, 0.08);   /* separadores */
+  --lq-overlay: rgba(0, 0, 0, 0.58);
+
+  /* Vidrio — tres niveles. Nivel 1 tarjeta · 2 panel · 3 barra y modal */
+  --lq-v1-bg: rgba(18, 18, 22, 0.55); --lq-v1-blur: 12px; --lq-v1-sat: 1.1; --lq-v1-ring: rgba(255, 255, 255, 0.08); --lq-v1-hi: rgba(255, 255, 255, 0.12); --lq-v1-sombra: 0 18px 48px rgba(0, 0, 0, 0.45);
+  --lq-v2-bg: rgba(18, 18, 22, 0.64); --lq-v2-blur: 18px; --lq-v2-sat: 1.2; --lq-v2-ring: rgba(255, 255, 255, 0.12); --lq-v2-hi: rgba(255, 255, 255, 0.15); --lq-v2-sombra: 0 18px 48px rgba(0, 0, 0, 0.62);
+  --lq-v3-bg: rgba(18, 18, 22, 0.74); --lq-v3-blur: 22px; --lq-v3-sat: 1.3; --lq-v3-ring: rgba(255, 255, 255, 0.2);  --lq-v3-hi: rgba(255, 255, 255, 0.19); --lq-v3-sombra: 0 18px 48px rgba(0, 0, 0, 0.9);
+  /* Plan B: la misma superficie, opaca (un hex por nivel) */
+  --lq-v1-solido: #16161b; --lq-v2-solido: #18181d; --lq-v3-solido: #1b1b21;
+
+  /* Campos */
+  --lq-campo-bg: rgba(255, 255, 255, 0.04);
+  --lq-campo-bg-hover: rgba(255, 255, 255, 0.06);
+  --lq-campo-ring: rgba(255, 255, 255, 0.12);
+
+  /* Estados. Verde SOLO para positivo. */
+  --lq-ok: #4ade80;  --lq-ok-bg: rgba(74, 222, 128, 0.14);  --lq-ok-fg: #86efac;
+  --lq-aten: #fbbf24; --lq-aten-bg: rgba(251, 191, 36, 0.14); --lq-aten-fg: #fcd34d;
+  --lq-err: #f87171; --lq-err-bg: rgba(248, 113, 113, 0.14); --lq-err-fg: #fca5a5;
+  --lq-info: #8aa4d6; --lq-info-bg: rgba(138, 164, 214, 0.14); --lq-info-fg: #b0c3e8;
+
+  --acento-suave: color-mix(in srgb, var(--acento-texto) 16%, transparent);
+  --acento-linea: color-mix(in srgb, var(--acento-texto) 38%, transparent);
+
+  /* Cifra grande: degradé plateado */
+  --lq-cifra-a: #ffffff; --lq-cifra-b: #9a9aa8;
+
+  /* Fondo propio (degradé + ruido, sin imágenes). Las luces toman un toque del acento. */
+  --lq-fondo-img:
+    radial-gradient(60rem 38rem at 12% -8%, color-mix(in srgb, var(--acento-fondo) 30%, transparent), transparent 62%),
+    radial-gradient(50rem 34rem at 96% 8%, rgba(70, 80, 140, 0.26), transparent 60%),
+    radial-gradient(70rem 40rem at 50% 118%, rgba(40, 60, 110, 0.32), transparent 60%),
+    linear-gradient(180deg, #0c0c10 0%, #0a0a0b 55%, #08080a 100%);
+  --lq-ruido-op: 0.07;
+}
+
+/* ---- 4. Tema CLARO ------------------------------------------------------ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --lq-fondo: #eef0f4;
+  --lq-texto: #0e0e12;
+  --lq-cuerpo: #3a3a45;
+  --lq-sec: #5c5c69;
+  --lq-deshab: #9a9dab;
+
+  --lq-superficie: #f7f8fa;
+  --lq-superficie-2: #ffffff;
+  --lq-fila: rgba(255, 255, 255, 0.94);
+  --lq-fila-hover: #ffffff;
+  --lq-hover: rgba(14, 14, 18, 0.05);
+  --lq-seleccion: rgba(14, 14, 18, 0.08);
+  --lq-linea: rgba(14, 14, 18, 0.08);
+  --lq-overlay: rgba(20, 22, 32, 0.38);
+
+  --lq-v1-bg: rgba(255, 255, 255, 0.60); --lq-v1-blur: 12px; --lq-v1-sat: 1.1; --lq-v1-ring: rgba(14, 14, 18, 0.08); --lq-v1-hi: rgba(255, 255, 255, 0.90); --lq-v1-sombra: 0 18px 48px rgba(24, 28, 48, 0.12);
+  --lq-v2-bg: rgba(255, 255, 255, 0.68); --lq-v2-blur: 18px; --lq-v2-sat: 1.2; --lq-v2-ring: rgba(14, 14, 18, 0.10); --lq-v2-hi: rgba(255, 255, 255, 0.95); --lq-v2-sombra: 0 18px 48px rgba(24, 28, 48, 0.16);
+  --lq-v3-bg: rgba(255, 255, 255, 0.78); --lq-v3-blur: 22px; --lq-v3-sat: 1.3; --lq-v3-ring: rgba(14, 14, 18, 0.14); --lq-v3-hi: #ffffff;                 --lq-v3-sombra: 0 18px 48px rgba(24, 28, 48, 0.24);
+  --lq-v1-solido: #f6f7fa; --lq-v2-solido: #f8f9fb; --lq-v3-solido: #fbfbfd;
+
+  --lq-campo-bg: rgba(255, 255, 255, 0.72);
+  --lq-campo-bg-hover: #ffffff;
+  --lq-campo-ring: rgba(14, 14, 18, 0.16);
+
+  --lq-ok: #146c34;  --lq-ok-bg: rgba(20, 108, 52, 0.10);   --lq-ok-fg: #0f5a2a;
+  --lq-aten: #92600a; --lq-aten-bg: rgba(146, 96, 10, 0.12); --lq-aten-fg: #7a4e06;
+  --lq-err: #b42318; --lq-err-bg: rgba(180, 35, 24, 0.10);  --lq-err-fg: #912018;
+  --lq-info: #3f5f9e; --lq-info-bg: rgba(63, 95, 158, 0.10); --lq-info-fg: #2f4a7d;
+
+  --acento-suave: color-mix(in srgb, var(--acento-texto) 12%, transparent);
+  --acento-linea: color-mix(in srgb, var(--acento-texto) 34%, transparent);
+
+  --lq-cifra-a: #0e0e12; --lq-cifra-b: #6b6b7a;
+
+  --lq-fondo-img:
+    radial-gradient(60rem 38rem at 10% -10%, color-mix(in srgb, var(--acento-fondo) 14%, transparent), transparent 62%),
+    radial-gradient(50rem 34rem at 98% 6%, rgba(120, 140, 220, 0.22), transparent 60%),
+    radial-gradient(70rem 40rem at 50% 120%, rgba(150, 175, 230, 0.30), transparent 60%),
+    linear-gradient(180deg, #f3f4f8 0%, #eef0f4 60%, #e8ebf1 100%);
+  --lq-ruido-op: 0.05;
+}
+
+/* Fondo de página: <body class="lq-fondo"> */
+.lq-fondo {
+  background-color: var(--color-bg);
+  background-image: var(--lq-fondo-img);
+  background-attachment: fixed;
+}
+.lq-fondo::before { /* ruido generado, sin imagen externa */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: var(--lq-ruido-op);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ---- 5. Receta de vidrio + plan B --------------------------------------- */
+/* Uso: SOLO en barras, paneles y modales. Nunca en filas de listas largas (ver .lq-sin-vidrio). */
+.lq-v1, .lq-v2, .lq-v3 {
+  background: var(--_bg); border: 0; border-radius: var(--lq-r-card);
+  -webkit-backdrop-filter: blur(var(--_blur)) saturate(var(--_sat));
+          backdrop-filter: blur(var(--_blur)) saturate(var(--_sat));
+  box-shadow: 0 0 0 1px var(--_ring), inset 0 1px 0 var(--_hi), var(--_sombra);
+}
+.lq-v1 { --_bg: var(--lq-v1-bg); --_blur: var(--lq-v1-blur); --_sat: var(--lq-v1-sat); --_ring: var(--lq-v1-ring); --_hi: var(--lq-v1-hi); --_sombra: var(--lq-v1-sombra); }
+.lq-v2 { --_bg: var(--lq-v2-bg); --_blur: var(--lq-v2-blur); --_sat: var(--lq-v2-sat); --_ring: var(--lq-v2-ring); --_hi: var(--lq-v2-hi); --_sombra: var(--lq-v2-sombra); border-radius: var(--lq-r-panel); }
+.lq-v3 { --_bg: var(--lq-v3-bg); --_blur: var(--lq-v3-blur); --_sat: var(--lq-v3-sat); --_ring: var(--lq-v3-ring); --_hi: var(--lq-v3-hi); --_sombra: var(--lq-v3-sombra); border-radius: var(--lq-r-panel); }
+
+/* Filas, celdas y tarjetas de kanban: nada de desenfoque (cada una sería una capa de GPU). */
+.lq-sin-vidrio, .lq-sin-vidrio * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* Plan B 1 — el navegador no soporta backdrop-filter: fondo sólido. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lq-v1 { --_bg: var(--lq-v1-solido); } .lq-v2 { --_bg: var(--lq-v2-solido); } .lq-v3 { --_bg: var(--lq-v3-solido); }
+}
+/* Plan B 2 — el sistema pide menos transparencia (Windows: «Efectos de transparencia» apagado). */
+@media (prefers-reduced-transparency: reduce) {
+  .lq-v1, .lq-v2, .lq-v3 { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .lq-v1 { --_bg: var(--lq-v1-solido); } .lq-v2 { --_bg: var(--lq-v2-solido); } .lq-v3 { --_bg: var(--lq-v3-solido); }
+}
+/* Plan B 3 — PCs lentas: <html class="efectos-reducidos"> (interruptor en Configuración).
+   Además de sólido: sin sombras grandes, sin animación de desenfoque, sin ruido ni fondo con luces. */
+.efectos-reducidos .lq-v1, .efectos-reducidos .lq-v2, .efectos-reducidos .lq-v3 {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 0 0 1px var(--_ring), inset 0 1px 0 var(--_hi), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.efectos-reducidos .lq-v1 { --_bg: var(--lq-v1-solido); } .efectos-reducidos .lq-v2 { --_bg: var(--lq-v2-solido); } .efectos-reducidos .lq-v3 { --_bg: var(--lq-v3-solido); }
+.efectos-reducidos .lq-fondo { background-image: none; }
+.efectos-reducidos .lq-fondo::before { display: none; }
+.efectos-reducidos .lq-enfoque { animation: none !important; filter: none !important; }
+
+/* ---- 6. Movimiento ------------------------------------------------------ */
+/* Título que entra desenfocado y se aclara (solo h1 de pantalla, una vez). */
+@keyframes lq-enfoque { from { opacity: 0; filter: blur(14px); transform: translateY(6px); } to { opacity: 1; filter: blur(0); transform: none; } }
+.lq-enfoque { animation: lq-enfoque var(--lq-d-titulo) var(--lq-ease) both; }
+@keyframes lq-sube { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.lq-sube { animation: lq-sube var(--lq-d-lento) var(--lq-ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .lq-enfoque { filter: none !important; transform: none !important; }
+}
+
+/* ---- Clases del Conectado ------------------------------------------------ */
+/* Barras (lateral y superior) y hojas laterales: vidrio nivel 2, sin radio ni sombra
+   propia (llevan borde de 1 px de Tailwind, que acá toma el color de línea). */
+.lq-barra {
+  background: var(--lq-v2-bg);
+  -webkit-backdrop-filter: blur(var(--lq-v2-blur)) saturate(var(--lq-v2-sat));
+          backdrop-filter: blur(var(--lq-v2-blur)) saturate(var(--lq-v2-sat));
+  border-color: var(--lq-linea);
+  box-shadow: inset 0 1px 0 var(--lq-v2-hi);
+}
+/* Modal y avisos: vidrio nivel 3, radio de panel. */
+.lq-modal {
+  background: var(--lq-v3-bg);
+  -webkit-backdrop-filter: blur(var(--lq-v3-blur)) saturate(var(--lq-v3-sat));
+          backdrop-filter: blur(var(--lq-v3-blur)) saturate(var(--lq-v3-sat));
+  border-radius: min(var(--lq-r-panel), 24px);
+  box-shadow: 0 0 0 1px var(--lq-v3-ring), inset 0 1px 0 var(--lq-v3-hi), var(--lq-v3-sombra);
+}
+/* Menús desplegables, popovers y selects: nivel 3, radio de control. */
+.lq-pop {
+  background: var(--lq-v3-bg);
+  -webkit-backdrop-filter: blur(var(--lq-v3-blur)) saturate(var(--lq-v3-sat));
+          backdrop-filter: blur(var(--lq-v3-blur)) saturate(var(--lq-v3-sat));
+  border-radius: var(--lq-r-ctrl);
+  box-shadow: 0 0 0 1px var(--lq-v3-ring), inset 0 1px 0 var(--lq-v3-hi), var(--lq-v3-sombra);
+}
+/* El overlay del modal no desenfoca: una capa menos. */
+.lq-overlay { background: var(--color-overlay); }
+/* Columna de kanban: vidrio nivel 2 con radio de tarjeta grande (las tarjetas de adentro son opacas). */
+.lq-columna { border-radius: var(--lq-r-card); }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lq-barra { background: var(--lq-v2-solido); }
+  .lq-modal, .lq-pop { background: var(--lq-v3-solido); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .lq-barra, .lq-modal, .lq-pop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .lq-barra { background: var(--lq-v2-solido); }
+  .lq-modal, .lq-pop { background: var(--lq-v3-solido); }
+}
+.efectos-reducidos .lq-barra, .efectos-reducidos .lq-modal, .efectos-reducidos .lq-pop {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.efectos-reducidos .lq-barra { background: var(--lq-v2-solido); }
+.efectos-reducidos .lq-modal, .efectos-reducidos .lq-pop { background: var(--lq-v3-solido); }
+
+/* Cifra grande (métricas) */
+.lq-cifra { display: grid; gap: 6px; }
+.lq-cifra-n { font-weight: 500; font-size: 52px; line-height: 56px; letter-spacing: -0.035em; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, var(--lq-cifra-a) 10%, var(--lq-cifra-b) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) { .lq-cifra-n { -webkit-text-fill-color: currentColor; background: none; } }

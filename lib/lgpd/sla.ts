@@ -1,5 +1,66 @@
 /**
- * LGPD SLA business-day calculator.
+ * Plazos del titular de los datos en Argentina (Ley 25.326) y, debajo, el
+ * calculador de días hábiles de Brasil que sigue usando `store_redact`.
+ *
+ * Solo dos cifras salen de la ley, y son las únicas que este archivo afirma:
+ *   - acceso: 10 días corridos desde la intimación (art. 14 inc. 2);
+ *   - rectificación, actualización o supresión: 5 días hábiles desde que se
+ *     recibe el reclamo (art. 16 inc. 2).
+ *
+ * Lo que la ley no dice y queda ⚖ para el abogado (ver `ABIERTO_PARA_ABOGADO`):
+ * qué feriados cuentan como inhábiles, si el plazo arranca el día siguiente y
+ * si un pedido cargado en el CRM vale como «intimación fehaciente».
+ *
+ * Mientras tanto la cuenta es la PRUDENTE: hábil = lunes a viernes, sin restar
+ * feriados. Contar un feriado como hábil da un vencimiento igual o ANTERIOR al
+ * legal, nunca posterior.
+ */
+
+/** Tipos de pedido que tienen plazo en la Ley 25.326. */
+export type PedidoDelTitular = "data_request" | "redact";
+
+export interface PlazoLegal {
+  dias: number;
+  tipo: "corridos" | "habiles";
+  fuente: string;
+}
+
+export const PLAZOS_LEY_25326: Record<PedidoDelTitular, PlazoLegal> = {
+  data_request: { dias: 10, tipo: "corridos", fuente: "Ley 25.326, art. 14 inc. 2" },
+  redact: { dias: 5, tipo: "habiles", fuente: "Ley 25.326, art. 16 inc. 2" },
+};
+
+/** ⚖ Lo que este cálculo supone y la ley no fija. Cada una espera al abogado. */
+export const ABIERTO_PARA_ABOGADO = [
+  "⚖ Feriados: hoy no se restan (cuenta prudente). ¿Qué calendario de inhábiles aplica al art. 16?",
+  "⚖ Inicio: se cuenta desde el día siguiente a la recepción, en hora de Buenos Aires.",
+  "⚖ ¿Un pedido cargado por el admin en el CRM equivale a la «intimación fehaciente» del art. 14?",
+] as const;
+
+/** Argentina no tiene horario de verano hoy: UTC−03:00 fijo. */
+const OFFSET_AR_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Vence al terminar (23:59:59.999, hora de Buenos Aires) el día N contado desde
+ * el día siguiente a `recibido`. Con `habiles` se saltean sábado y domingo.
+ */
+export function vencimientoLegalAR(tipoDePedido: PedidoDelTitular, recibido: Date): Date {
+  const { dias, tipo } = PLAZOS_LEY_25326[tipoDePedido];
+  // Fecha calendario en Buenos Aires, como medianoche UTC para contar días.
+  const local = new Date(recibido.getTime() - OFFSET_AR_MS);
+  let cursor = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
+  let faltan = dias;
+  while (faltan > 0) {
+    cursor = addOneDay(cursor);
+    const dow = cursor.getUTCDay();
+    if (tipo === "corridos" || (dow !== 0 && dow !== 6)) faltan--;
+  }
+  // Fin de ese día en Buenos Aires = inicio del siguiente + 3 h − 1 ms (UTC).
+  return new Date(addOneDay(cursor).getTime() + OFFSET_AR_MS - 1);
+}
+
+/**
+ * LGPD SLA business-day calculator (Brasil). Solo `store_redact` lo usa.
  *
  * Rules (L-04):
  *  - SLA is expressed in Brazilian business days (dias úteis).

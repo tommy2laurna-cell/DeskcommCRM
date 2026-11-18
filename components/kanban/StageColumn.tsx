@@ -10,6 +10,8 @@ import { buildCardInput } from "@/lib/kanban/card-state";
 import { intervaloDaColuna } from "@/lib/kanban/selecao";
 import { KanbanCard, type GestoDeSelecao } from "./KanbanCard";
 
+import type { PuntajeCalculado } from "@/lib/puntaje/reglas";
+
 interface StageColumnProps {
   stage: Stage;
   leads: Lead[];
@@ -25,6 +27,8 @@ interface StageColumnProps {
   selectedLeadIds?: Set<string>;
   /** leadId → quantos eventos remotos já chegaram (muda = pulsa de novo). */
   pulses?: Map<string, number>;
+  /** leadId → puntaje de prioridad ya calculado por el board. */
+  puntajes?: Map<string, PuntajeCalculado>;
   /**
    * Marca/desmarca um conjunto de uma vez — a etapa inteira, ou o intervalo do
    * shift+clique. Existe separado de `onSelect` porque a coluna é a única que
@@ -46,6 +50,7 @@ export function StageColumn({
   canonicalTags,
   selectedLeadIds,
   pulses,
+  puntajes,
   onSelectMany,
   onOpen,
 }: StageColumnProps) {
@@ -81,7 +86,7 @@ export function StageColumn({
     : undefined;
 
   return (
-    <div className="flex w-80 shrink-0 flex-col rounded-lg border border-border bg-surface-muted/40">
+    <div className="flex w-80 shrink-0 flex-col lq-v2 lq-columna">
       <div className="group/etapa flex items-center gap-2 border-b border-border px-3 py-2.5">
         {/* "Selecionar a etapa inteira" é o gesto que faz a ação em lote valer a
             pena: sem ele, mover trinta cards deixa de ser trinta arrastes e vira
@@ -157,6 +162,7 @@ export function StageColumn({
                 isSelected={selectedLeadIds?.has(lead.id)}
                 isSelecting={(selectedLeadIds?.size ?? 0) > 0}
                 pulseCount={pulses?.get(lead.id) ?? 0}
+                puntaje={puntajes?.get(lead.id) ?? null}
                 onSelect={aoSelecionar}
                 onOpen={onOpen}
               />

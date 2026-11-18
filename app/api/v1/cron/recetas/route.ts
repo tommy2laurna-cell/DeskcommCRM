@@ -26,6 +26,7 @@ import {
   estaQuieto,
   estaSinRespuesta,
 } from "@/lib/recetas/barrido";
+import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,8 @@ interface Emision {
   tipo: Tipo;
   entityKind: "calendar_appointment" | "contact" | "crm_lead";
   entityId: string;
+  /** Contacto al que habla el envío: con él se estampa `service_origin`. */
+  contactId: string;
   payload: Record<string, unknown>;
 }
 type Previos = Map<string, Array<{ created_at: string; payload: Record<string, unknown> }>>;
@@ -74,7 +77,7 @@ async function turnos(admin: SupabaseClient, org: string, agora: Date): Promise<
   // `cron/agenda-reminder`: acá se saltean para no mandar dos veces.
   const { data } = await admin
     .from("calendar_appointments")
-    .select("id, starts_at, created_at, calendar_event_types!inner(reminder_enabled)")
+    .select("id, contact_id, starts_at, created_at, calendar_event_types!inner(reminder_enabled)")
     .eq("organization_id", org)
     .eq("status", "confirmed")
     .eq("calendar_event_types.reminder_enabled", false)
@@ -107,6 +110,7 @@ async function turnos(admin: SupabaseClient, org: string, agora: Date): Promise<
         tipo: "appointment.reminder",
         entityKind: "calendar_appointment",
         entityId: f.id as string,
+        contactId: f.contact_id as string,
         payload: { offset_minutes: offsetMin, starts_at: f.starts_at },
       });
     }
@@ -155,7 +159,7 @@ async function sinRespuesta(admin: SupabaseClient, org: string, agora: Date): Pr
     const saliente = new Date(c.last_outbound_at as string).getTime();
     // Una sola vez por mensaje nuestro sin respuesta.
     if ((previos.get(id) ?? []).some((p) => new Date(p.created_at).getTime() >= saliente)) continue;
-    salida.push({ org, tipo: "contact.silent", entityKind: "contact", entityId: id, payload: { hours: BANDA.silencioHoras } });
+    salida.push({ org, tipo: "contact.silent", entityKind: "contact", entityId: id, contactId: id, payload: { hours: BANDA.silencioHoras } });
     if (salida.length >= TOPE) break;
   }
   return salida;
@@ -164,9 +168,10 @@ async function sinRespuesta(admin: SupabaseClient, org: string, agora: Date): Pr
 async function leadsQuietos(admin: SupabaseClient, org: string, agora: Date): Promise<Emision[]> {
   const { data } = await admin
     .from("crm_leads")
-    .select("id, last_activity_at")
+    .select("id, contact_id, last_activity_at")
     .eq("organization_id", org)
     .eq("status", "open")
+    .not("contact_id", "is", null)
     .gte("last_activity_at", new Date(agora.getTime() - (BANDA.quietoDias + BANDA.anchoDias) * DIA).toISOString())
     .lte("last_activity_at", new Date(agora.getTime() - BANDA.quietoDias * DIA).toISOString())
     .limit(TOPE * 2);
@@ -180,6 +185,7 @@ async function leadsQuietos(admin: SupabaseClient, org: string, agora: Date): Pr
       tipo: "lead.idle" as const,
       entityKind: "crm_lead" as const,
       entityId: l.id as string,
+      contactId: l.contact_id as string,
       payload: { days: BANDA.quietoDias },
     }));
 }
@@ -204,6 +210,7 @@ async function dormidos(admin: SupabaseClient, org: string, agora: Date): Promis
       tipo: "contact.dormant" as const,
       entityKind: "contact" as const,
       entityId: c.id as string,
+      contactId: c.id as string,
       payload: { days: BANDA.dormidoDias },
     }));
 }
@@ -259,11 +266,14 @@ async function handle(req: NextRequest): Promise<Response> {
       continue;
     }
     for (const e of emisiones) {
+      // Procedencia del envío (0302): el retrato del atendimento al emitir. Sin
+      // él, `fn_service_event_origin` responde `service_stale` y la receta no envía.
+      const serviceOrigin = await observeServiceOrigin(admin, e.org, e.contactId);
       const { error: errorEvento } = await admin.rpc("emit_event" as never, {
         p_event_type: e.tipo,
         p_entity_kind: e.entityKind,
         p_entity_id: e.entityId,
-        p_payload: e.payload,
+        p_payload: { ...e.payload, service_origin: serviceOrigin },
         p_metadata: { actor_kind: "system", source: "cron/recetas" },
         p_organization_id: e.org,
       });

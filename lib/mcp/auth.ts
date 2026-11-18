@@ -146,6 +146,34 @@ export async function resolveApiToken(plaintext: string): Promise<ResolvedApiTok
     throw new ApiTokenError("expired", "Token expired.");
   }
 
+  // Aislamiento #4-#6: una org suspendida (o archivada) no usa sus tokens.
+  const { data: org, error: orgErr } = await supabase
+    .from("organizations")
+    .select("status")
+    .eq("id", data.organization_id)
+    .maybeSingle();
+  if (orgErr) throw new ApiTokenError("lookup_failed", `Org lookup failed: ${orgErr.message}`);
+  if (!org || org.status !== "active") throw new ApiTokenError("revoked", "Organization not active.");
+
+  // Aislamiento #3: el rol del token no queda congelado. Un token de persona no puede
+  // más que quien lo creó HOY (degradado o fuera de la org = el token pierde ese poder).
+  let scopes = parseScopes(data.scopes);
+  if (!scopes.includes("actor:ai_agent")) {
+    const { data: m, error: mErr } = await supabase
+      .from("user_organizations")
+      .select("role")
+      .eq("user_id", data.created_by)
+      .eq("organization_id", data.organization_id)
+      .is("revoked_at", null)
+      .maybeSingle();
+    if (mErr) throw new ApiTokenError("lookup_failed", `Membership lookup failed: ${mErr.message}`);
+    if (!m) throw new ApiTokenError("revoked", "Token owner no longer in organization.");
+    const actual = m.role as Role;
+    if (ROLE_RANK[scopesRole(scopes)] > (ROLE_RANK[actual] ?? 0)) {
+      scopes = [...scopes.filter((s) => !s.startsWith("role:")), `role:${actual}`];
+    }
+  }
+
   supabase
     .from("api_tokens")
     .update({ last_used_at: new Date().toISOString() })
@@ -157,7 +185,7 @@ export async function resolveApiToken(plaintext: string): Promise<ResolvedApiTok
   return {
     id: data.id,
     organizationId: data.organization_id,
-    scopes: parseScopes(data.scopes),
+    scopes,
     createdBy: data.created_by,
   };
 }
