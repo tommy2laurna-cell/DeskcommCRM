@@ -481,6 +481,15 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    href: "/app/recetas",
+    label: "Receitas",
+    description: "Automações típicas prontas: ligue com um clique e edite o texto.",
+    icon: "FlowArrow",
+    group: "canais",
+    minRole: "manager",
+    sidebar: true,
+  },
+  {
     href: "/app/webhooks",
     label: "Webhooks",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",

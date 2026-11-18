@@ -56,6 +56,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Achado por @jmpo, no cabeçalho do teste que ele escreveu no PR #199.
     tag: url.searchParams.get("tag") ?? undefined,
     unread: url.searchParams.get("unread") ?? undefined,
+    sin_responder: url.searchParams.get("sin_responder") ?? undefined,
     channel_session_id: url.searchParams.get("channel_session_id") ?? undefined,
     search: url.searchParams.get("search") ?? undefined,
     cursor: url.searchParams.get("cursor") ?? undefined,

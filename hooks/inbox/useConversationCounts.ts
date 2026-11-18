@@ -24,6 +24,7 @@ export interface ConversationCounts {
 /** Os filtros auxiliares ligados na barra, que a contagem tem de aplicar junto. */
 export interface FiltrosDaContagem {
   unread?: boolean;
+  sin_responder?: boolean;
   tag?: string;
   channel_session_id?: string;
 }
@@ -38,6 +39,7 @@ export function useConversationCounts(
 ) {
   const qs = new URLSearchParams();
   if (filtros.unread) qs.set("unread", "true");
+  if (filtros.sin_responder) qs.set("sin_responder", "true");
   if (filtros.tag) qs.set("tag", filtros.tag);
   if (filtros.channel_session_id) qs.set("channel_session_id", filtros.channel_session_id);
   const sufixo = qs.toString();

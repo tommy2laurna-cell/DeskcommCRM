@@ -98,6 +98,8 @@ CRONS="
 # LAS CAMPAÑAS. Cada minuto, un lote chico por campaña: el envío es escalonado
 # (espaciamiento + tope diario) y el cron solo reparte el trabajo en tandas.
 * * * * *|60|api/v1/cron/campaigns
+# Reloj de las recetas (turno 24 h/2 h, sin respuesta, quieto, dormido): solo emite eventos.
+*/10 * * * *|60|api/v1/cron/recetas
 0 12 * * *|60|api/v1/cron/lgpd-sla-watcher
 30 3 * * *|120|api/v1/cron/kb-conversations-batch
 15 4 * * *|60|api/v1/cron/sync-model-catalog

@@ -16,6 +16,7 @@ import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSes
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useConversationTagVocabulary } from "@/hooks/inbox/useConversationTags";
 import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
+import { useAttendants } from "@/hooks/team/useAttendants";
 import type { Role, VisibilityMode } from "@/lib/auth/types";
 
 export type InboxTab = "unassigned" | "mine" | "all" | "closed" | "archived" | "ai";
@@ -52,6 +53,10 @@ export interface InboxFiltersValue {
   tab: InboxTab;
   search: string;
   onlyUnread: boolean;
+  /** Escribieron y nadie contestó. */
+  sinResponder?: boolean;
+  /** Un atendente puntual (solo en la vista Todas). */
+  asignado?: string;
   channel_session_id?: string;
   tag?: string;
 }
@@ -98,6 +103,7 @@ export function InboxFilters({ value, onChange }: Props) {
   // na rota; faltava alcançar os filtros ao lado da aba.
   const { data: counts } = useConversationCounts(activeOrg?.orgId ?? null, {
     unread: value.onlyUnread,
+    sin_responder: value.sinResponder,
     tag: value.tag,
     channel_session_id: value.channel_session_id,
   });
@@ -218,10 +224,26 @@ export function InboxFilters({ value, onChange }: Props) {
           >
             {t("Não lidos")}
           </button>
+          <button
+            type="button"
+            aria-pressed={!!value.sinResponder}
+            data-testid="filtro-sin-responder"
+            onClick={() => onChange({ ...value, sinResponder: !value.sinResponder })}
+            className={cn(
+              "h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              value.sinResponder
+                ? "border-accent bg-accent text-accent-foreground"
+                : "border-border bg-transparent text-text-muted hover:bg-surface-elevated",
+            )}
+          >
+            {t("Sem resposta")}
+          </button>
         </div>
 
-        {(showChannelSwitch || mostrarSeletorDeTag) && (
+        {(showChannelSwitch || mostrarSeletorDeTag || value.tab === "all") && (
           <div className="flex gap-2">
+            {value.tab === "all" && <SelectorDeAtendente value={value} onChange={onChange} />}
             {showChannelSwitch && (
               <Select
                 value={value.channel_session_id ?? "all"}
@@ -313,5 +335,41 @@ export function InboxFilters({ value, onChange }: Props) {
         </TabsList>
       </Tabs>
     </div>
+  );
+}
+
+/**
+ * "Asignado a": un atendente puntual. Vive en su componente para que la consulta
+ * de atendentes solo corra en la vista Todas, que es donde se muestra.
+ */
+function SelectorDeAtendente({ value, onChange }: Props) {
+  const t = useT();
+  const { data } = useAttendants();
+  const atendentes = data?.data ?? [];
+  if (atendentes.length === 0) return null;
+  return (
+    <Select
+      value={value.asignado ?? "all"}
+      onValueChange={(v) => onChange({ ...value, asignado: v === "all" ? undefined : v })}
+    >
+      <SelectTrigger
+        className={cn(
+          "h-8 min-w-0 flex-1 rounded-full border-transparent bg-surface-elevated px-3 text-xs shadow-none",
+          value.asignado != null && "border-accent bg-accent-soft text-accent",
+        )}
+        aria-label={t("Filtrar por responsável")}
+        data-testid="filtro-asignado"
+      >
+        <SelectValue placeholder={t("Todos os responsáveis")} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">{t("Todos os responsáveis")}</SelectItem>
+        {atendentes.map((a) => (
+          <SelectItem key={a.user_id} value={a.user_id}>
+            {a.name ?? a.user_id.slice(0, 8)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
