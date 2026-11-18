@@ -568,7 +568,8 @@ test.describe("aislamiento entre organizaciones", () => {
     const sv = service();
     const emisor = sv.channel(`org:${oB}:queue`);
     await suscribir(emisor);
-    await emisor.send({ type: "broadcast", event: "handoff", payload: { marca: seed.canario } });
+    // Sin emisión sintética: un canal público lo escucha cualquiera por diseño. Lo que se mide
+    // es que la APP no publique nada de B en un canal público mientras entra un mensaje de B.
     const B = seed.datos.B;
     const ins = await sv
       .from("messages")
