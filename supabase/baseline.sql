@@ -18291,7 +18291,8 @@ returns setof uuid language sql stable security definer set search_path = public
 $f$;
 create or replace function public.fn_user_role_in_org(p_org uuid)
 returns text language sql stable security definer set search_path = public as $f$
- select case when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
+ select case when not exists (select 1 from public.organizations o where o.id=p_org and o.status='active') then null
+ when s->>'status'='active' and (s->>'organization_id')::uuid=p_org
  then case when s->>'access_mode'='full' then 'admin' else 'viewer' end
  else (select role from public.user_organizations where user_id=auth.uid() and organization_id=p_org and revoked_at is null limit 1) end
  from (select public.fn_support_context() s) c;
