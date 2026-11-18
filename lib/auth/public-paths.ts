@@ -14,6 +14,12 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/503$/,
   /^\/api\/v1\/health$/,
   /^\/api\/v1\/webhooks\//,
+  // CAPTACIÓN PÚBLICA (formularios y encuestas): la página, el envío y el script de
+  // la web del cliente. Anclados con `$`: solo el slug, nada que cuelgue de él.
+  // La organización sale del slug dentro de la ruta, nunca del body.
+  /^\/f\/[a-z0-9]{8,32}$/,
+  /^\/api\/v1\/captar\/publico\/[a-z0-9]{8,32}$/,
+  /^\/embed\/formulario\.js$/,
   /^\/api\/v1\/cron\//,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
@@ -59,6 +65,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // carona a `/api/v1/messages/[id]`, que NÃO tem suporte a Bearer.
   /^\/api\/v1\/messages$/,
   /^\/api\/v1\/conversations\/open-with-contact$/,
+  // Entrada de prospectos desde n8n: sesión OU Bearer `dsk_…` con `mcp:write`,
+  // resuelto por `resolveAuthDual` dentro de la ruta. Ancorada con `$`.
+  /^\/api\/v1\/prospectos$/,
   // Upload outbound: primeiro passo do envio de MÍDIA por token. Sem ele, o
   // cartão de fidelidade (a única das automações que não é texto) não teria
   // como sair depois do corte de gateway.
@@ -72,6 +81,7 @@ export const PUBLIC_PATHS: RegExp[] = [
   // antes desta linha: `GET /icon` → 307 para `/login?next=%2Ficon`, enquanto
   // `/icon.png` (inexistente) devolvia 404 — a diferença é só a extensão.
   /^\/icon$/,
+  /^\/icone\/(192|512)$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
   /^\/account-suspended$/,

@@ -19,6 +19,7 @@
  *  3. a segunda mensagem do MESMO contato não abre um segundo card.
  */
 import { execFileSync } from "node:child_process";
+import { createHmac } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -72,18 +73,26 @@ async function login(page: Page): Promise<void> {
 
 /** Um inbound de texto, como o WAHA o entrega. */
 async function mandarMensagem(page: Page, texto: string, id: string): Promise<number> {
+  // La imagen de producción exige firma (`WAHA_WEBHOOK_REQUIRE_SIGNATURE` es true por defecto). El
+  // rig define `WAHA_HMAC_SECRET` y la firma sale como la manda WAHA: sha512 hex del cuerpo crudo.
+  const cuerpo = JSON.stringify({
+    event: "message",
+    session: creds.nascimento!.session_name,
+    payload: {
+      id,
+      from: `${TELEFONE}@c.us`,
+      fromMe: false,
+      body: texto,
+      timestamp: Math.floor(Date.now() / 1000),
+      _data: { notifyName: NOME },
+    },
+  });
+  const secreto = process.env.WAHA_HMAC_SECRET;
   const r = await page.request.post(`/api/v1/webhooks/waha/${creds.nascimento!.webhook_token}`, {
-    data: {
-      event: "message",
-      session: creds.nascimento!.session_name,
-      payload: {
-        id,
-        from: `${TELEFONE}@c.us`,
-        fromMe: false,
-        body: texto,
-        timestamp: Math.floor(Date.now() / 1000),
-        _data: { notifyName: NOME },
-      },
+    data: cuerpo,
+    headers: {
+      "content-type": "application/json",
+      ...(secreto ? { "x-webhook-hmac": createHmac("sha512", secreto).update(cuerpo).digest("hex") } : {}),
     },
   });
   return r.status();

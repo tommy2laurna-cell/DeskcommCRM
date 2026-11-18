@@ -204,7 +204,7 @@ export function SetupAiForm({ capacidades, conferencias }: Props) {
       {regrasNaoSalvas && (
         <div
           role="alert"
-          className="space-y-2 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="space-y-2 rounded-md border border-warning/40 bg-warning-bg p-4"
         >
           <p className="text-sm font-medium">
             {t("O atendente foi criado, mas as")} <strong>{t("regras da casa")}</strong>{" "}
@@ -220,7 +220,7 @@ export function SetupAiForm({ capacidades, conferencias }: Props) {
       {causa === "chave" && (
         <div
           role="alert"
-          className="space-y-3 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="space-y-3 rounded-md border border-warning/40 bg-warning-bg p-4"
         >
           <p className="text-sm font-medium">
             {t("Seu atendente foi criado, mas ficou como")} <strong>{t("rascunho")}</strong>{" "}
@@ -257,7 +257,7 @@ export function SetupAiForm({ capacidades, conferencias }: Props) {
       {causa === "modelo" && (
         <div
           role="alert"
-          className="space-y-3 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="space-y-3 rounded-md border border-warning/40 bg-warning-bg p-4"
         >
           <p className="text-sm font-medium">
             {t("Seu atendente foi criado, mas ficou como")} <strong>{t("rascunho")}</strong>{" "}
@@ -302,7 +302,7 @@ export function SetupAiForm({ capacidades, conferencias }: Props) {
       {naoPublicado && (
         <div
           role="alert"
-          className="space-y-3 rounded-md border border-amber-300/60 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/20"
+          className="space-y-3 rounded-md border border-warning/40 bg-warning-bg p-4"
         >
           <p className="text-sm font-medium">
             {t("Seu agente foi criado, mas ficou como")} <strong>{t("rascunho")}</strong>:{" "}

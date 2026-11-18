@@ -74,6 +74,11 @@ const schema = z.object({
   INTERNAL_SECRET: required("INTERNAL_SECRET"),
   /** Optional dedicated secret for cron endpoints (S-06.07 onwards). */
   INTERNAL_CRON_SECRET: z.string().optional().default(""),
+  /**
+   * Transporte de las campañas. Vacío = la API de Meta (lo normal). `simulado` NO llama a
+   * Meta: marca el envío como hecho con un id `sim:`; existe para las pruebas de jornada.
+   */
+  CAMPAIGNS_TRANSPORT: z.enum(["", "simulado"]).optional().default(""),
 
   // Laboratório local de extensões: origem HTTP exata em 127.0.0.1. O cliente
   // recusa a exceção se a URL do app não for loopback. Vazio mantém HTTPS público.
