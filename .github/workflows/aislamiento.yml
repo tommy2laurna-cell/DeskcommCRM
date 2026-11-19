@@ -13,9 +13,6 @@ name: aislamiento
 # lo que se mide es exactamente el código de esta rama. Se corre dos veces,
 # con Caddy (el Caddyfile de producción delante) y sin Caddy, porque el webhook
 # global de WAHA (H5) y el XFF dependen del proxy.
-#
-# Hoy, sobre main, el resultado esperado es ROJO ("falla antes"). Pasa a check
-# obligatorio recién cuando dé verde sobre la rama con los arreglos.
 
 on:
   workflow_dispatch:
@@ -26,7 +23,7 @@ on:
         default: ""
   pull_request:
   push:
-    branches: [audit/aislamiento-2orgs]
+    branches: [main]
 
 permissions:
   contents: read

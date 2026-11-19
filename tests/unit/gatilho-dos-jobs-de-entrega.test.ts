@@ -189,6 +189,12 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
   },
 
   // --- fora da cadeia de entrega ---------------------------------------------
+  "aislamiento.yml::aislamiento": {
+    condicao: null,
+    efeito:
+      "Prueba de dos organizaciones: un actor de ORG_A intenta leer y escribir datos de ORG_B por PostgREST, " +
+      "la API HTTP y el MCP, con y sin Caddy. Pulado, una fuga entre clientes pasa sin que nada se ponga rojo.",
+  },
   "humo.yml::humo": {
     condicao: null,
     efeito:
