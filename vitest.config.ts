@@ -30,6 +30,8 @@ export default defineConfig({
       "tests/e2e/**",
       "tests/invariants/**",
       "tests/journeys/**",
+      // Spec de Playwright (workflow aislamiento): mismo motivo que e2e.
+      "tests/aislamiento/**",
       // Bancada opcional: usa node:test, PostgreSQL próprio e Playwright com
       // configuração dedicada. Não depende do ambiente da suíte do produto.
       "experiments/extensoes/**",
