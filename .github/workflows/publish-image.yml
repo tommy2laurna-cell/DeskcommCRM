@@ -336,7 +336,21 @@ jobs:
       # GITHUB_TOKEN herdaria o default do REPOSITÓRIO — configuração que vive
       # fora do repo, muda num clique e não passa por PR.
       packages: write
+      actions: read
     steps:
+      # `stable` so anda se `ci` esta en success para el SHA de la tag.
+      - name: ci verde en este SHA?
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ok=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=completed" \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          if [ "$ok" -lt 1 ]; then
+            echo "::error::ci no esta en success para ${GITHUB_SHA}: stable no se promueve."
+            exit 1
+          fi
+
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
