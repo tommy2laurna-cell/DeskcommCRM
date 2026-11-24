@@ -211,7 +211,7 @@ jobs:
             docker logs "$c" > "$AISLAMIENTO_OUT/logs/$c.log" 2>&1 || true
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aislamiento-${{ matrix.proxy }}
