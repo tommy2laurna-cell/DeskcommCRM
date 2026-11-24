@@ -64,7 +64,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Compilar la imagen del app (este commit)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: objetivo
           file: objetivo/Dockerfile
@@ -74,7 +74,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=aislamiento-app
 
       - name: Compilar la imagen del worker (este commit)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: objetivo
           file: objetivo/Dockerfile.worker
